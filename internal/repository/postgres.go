@@ -18,8 +18,9 @@ func NewPostgresRepository(db *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// 承诺 PostgresRepository 实现了 OrderRepository 接口，如果没实现则通过不了编译（还没实现）
+// 承诺 PostgresRepository 实现了 OrderRepository 接口，如果没实现则通过不了编译
 var _ order.OrderRepository = (*PostgresRepository)(nil)
+var _ order.DBTransaction = (*PostgresRepository)(nil)
 
 // 通过BeginFunc来实现成功提交失败回滚
 func (r *PostgresRepository) ExecTx(ctx context.Context, fn func(ctx context.Context) error) error {

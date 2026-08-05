@@ -6,17 +6,36 @@ import (
 )
 
 // 1=BUY,2=SELL
-type Orderside int16
+type OrderSide int16
 
 // 1=NEW,2=PARTIALLY_FILLED,3=FILLED,4=CANCELLED
 type OrderStatus int16
+
+const (
+	SideBuy  OrderSide = 1
+	SideSell OrderSide = 2
+
+	StatusNew             OrderStatus = 1 // 新訂單
+	StatusPartiallyFilled OrderStatus = 2 // 部分成交
+	StatusFilled          OrderStatus = 3 // 完全成交
+	StatusCanceled        OrderStatus = 4 // 已取消
+)
 
 type Order struct {
 	ID             uuid.UUID       `json:"id"`
 	Symbol         string          `json:"symbol"`
 	Price          decimal.Decimal `json:"price"`
 	Quantity       decimal.Decimal `json:"quantity"`
-	Side           Orderside       `json:"side"` // 不用string确保类型安全
+	Side           OrderSide       `json:"side"` // 不用string确保类型安全
 	Status         OrderStatus     `json:"status"`
 	FilledQuantity decimal.Decimal `json:"filledQuantity"`
+}
+
+var allowedSymbol = map[string]bool{
+	"BTC-USD": true,
+	"ETH-USD": true,
+}
+
+func IsSymbolAllowed(symbol string) bool {
+	return allowedSymbol[symbol]
 }
