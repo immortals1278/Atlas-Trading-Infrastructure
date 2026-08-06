@@ -38,7 +38,7 @@ type DBExecutor interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// 有些操作需要在事务内执行，有些不用
+// 有些操作需要在事务内执行，有些不用(用pool)
 func (r *PostgresRepository) GetExecutor(ctx context.Context) DBExecutor {
 	if tx := db.GetTx(ctx); ctx != nil {
 		return tx

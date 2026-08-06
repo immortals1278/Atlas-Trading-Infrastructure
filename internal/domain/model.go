@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
@@ -23,6 +25,7 @@ const (
 
 type Order struct {
 	ID             uuid.UUID       `json:"id"`
+	UserID         uuid.UUID       `json:"userid"`
 	Symbol         string          `json:"symbol"`
 	Price          decimal.Decimal `json:"price"`
 	Quantity       decimal.Decimal `json:"quantity"`
@@ -30,6 +33,11 @@ type Order struct {
 	Status         OrderStatus     `json:"status"`
 	FilledQuantity decimal.Decimal `json:"filledQuantity"`
 }
+
+var (
+	ErrInsufficientFunds = fmt.Errorf("insufficient funds")
+	ErrIdempotencySkip   = fmt.Errorf("idempotency skip: event already processed")
+)
 
 var allowedSymbol = map[string]bool{
 	"BTC-USD": true,

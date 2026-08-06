@@ -50,9 +50,12 @@ func (s *Service) PlaceOrder(ctx context.Context, order *domain.Order) (err erro
 	order.FilledQuantity = decimal.Zero
 
 	err = s.txManager.ExecTx(ctx, func(ctx context.Context) error {
-		// 锁用户资金逻辑
+		if err := s.accountRepo.LockFunds(ctx, order.UserID, currencyToLock, amountToLock); err != nil {
+			return fmt.Errorf("冻结失败：%w", err)
+		}
+
 		if err := s.orderRepo.CreateOrder(ctx, order); err != nil {
-			return fmt.Errorf("创建订单失败", err)
+			return fmt.Errorf("创建订单失败: %w", err)
 		}
 
 		if !domain.IsSymbolAllowed(order.Symbol) {

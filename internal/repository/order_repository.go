@@ -10,8 +10,8 @@ import (
 func (r *PostgresRepository) CreateOrder(ctx context.Context, order *domain.Order) error {
 	executor := r.GetExecutor(ctx)
 	query := `
-		INSERT INTO orders (id, symbol, price, quantity, side, status, filled_quantity)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+		INSERT INTO orders (id, userid, symbol, price, quantity, side, status, filled_quantity)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
 	_, err := executor.Exec(ctx, query, order.ID, order.Symbol, order.Side,
 		order.Price, order.Quantity, order.FilledQuantity, order.Status)
@@ -22,7 +22,7 @@ func (r *PostgresRepository) CreateOrder(ctx context.Context, order *domain.Orde
 func (r *PostgresRepository) GetOrder(ctx context.Context, id uuid.UUID) (*domain.Order, error) {
 	executor := r.GetExecutor(ctx)
 	query := `
-		SELECT id, symbol, side, price, quantity, filled_quantity, status
+		SELECT id, userid, symbol, side, price, quantity, filled_quantity, status
 		FROM orders WHERE id = $1`
 
 	row := executor.QueryRow(ctx, query, id)
@@ -33,7 +33,7 @@ func (r *PostgresRepository) UpdateOrder(ctx context.Context, order *domain.Orde
 	executor := r.GetExecutor(ctx)
 	query := `
 		UPDATE orders 
-		SET filled_quantity = $1, status = $2, updated_at = $3
+		SET filled_quantity = $1, status = $2
 		WHERE id = $4`
 
 	_, err := executor.Exec(ctx, query,
