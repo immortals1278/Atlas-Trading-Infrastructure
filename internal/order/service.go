@@ -2,6 +2,7 @@ package order
 
 import (
 	"atlas-trading-infrastructure/internal/domain"
+	"atlas-trading-infrastructure/internal/infrastructure/outbox"
 	"context"
 	"fmt"
 	"strings"
@@ -14,17 +15,23 @@ type Service struct {
 	orderRepo   OrderRepository
 	accountRepo AccountRepository
 	txManager   DBTransaction
+	eventBus    domain.EventPublisher
+	outboxRepo  *outbox.Repository
 }
 
 func NewService(
 	orderRepo OrderRepository,
 	txManager DBTransaction,
 	accountRepo AccountRepository,
+	eventBus domain.EventPublisher,
+	outboxRepo *outbox.Repository
 ) *Service {
 	s := &Service{
 		orderRepo:   orderRepo,
 		txManager:   txManager,
 		accountRepo: accountRepo,
+		eventBus:    eventBus,
+		outboxRepo: outboxRepo,
 	}
 	return s
 }
@@ -49,6 +56,7 @@ func (s *Service) PlaceOrder(ctx context.Context, order *domain.Order) (err erro
 	order.Status = domain.StatusNew
 	order.FilledQuantity = decimal.Zero
 
+	var outboxMsg *outbox.Message
 	err = s.txManager.ExecTx(ctx, func(ctx context.Context) error {
 		if err := s.accountRepo.LockFunds(ctx, order.UserID, currencyToLock, amountToLock); err != nil {
 			return fmt.Errorf("冻结失败：%w", err)
@@ -60,6 +68,25 @@ func (s *Service) PlaceOrder(ctx context.Context, order *domain.Order) (err erro
 
 		if !domain.IsSymbolAllowed(order.Symbol) {
 			return fmt.Errorf("不允许的交易对：%w", err)
+		}
+
+		if s.outboxRepo != nil && s.eventBus != nil {
+			event := &domain.OrderPlaceEvent{
+				EventType:      domain.EventOrderPlaced,
+				Symbol:         order.Symbol,
+				OrderID:        order.ID,
+				UserID:         order.UserID,
+				Side:           order.Side,
+				Price:          order.Price,
+				Quantity:       order.Quantity,
+				CreatedAt:      order.CreatedAt,
+				AmountLocked:   amountToLock,
+				LockedCurrency: currencyToLock,
+			} 
+		}
+
+		if insertErr := outbox.InsertMsg(ctx, outboxMsg); insertErr != 0 {
+			return fmt.Errorf("写入outbox失败: %w", insertErr)
 		}
 
 		return nil
