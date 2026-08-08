@@ -12,11 +12,12 @@ import (
 )
 
 type Service struct {
-	orderRepo   OrderRepository
-	accountRepo AccountRepository
-	txManager   DBTransaction
-	eventBus    domain.EventPublisher
-	outboxRepo  *outbox.Repository
+	orderRepo    OrderRepository
+	accountRepo  AccountRepository
+	txManager    DBTransaction
+	eventBus     domain.EventPublisher
+	rawPublisher outbox.Publisher
+	outboxRepo   *outbox.Repository
 }
 
 func NewService(
@@ -24,14 +25,16 @@ func NewService(
 	txManager DBTransaction,
 	accountRepo AccountRepository,
 	eventBus domain.EventPublisher,
-	outboxRepo *outbox.Repository
+	rawPublisher outbox.Publisher,
+	outboxRepo *outbox.Repository,
 ) *Service {
 	s := &Service{
-		orderRepo:   orderRepo,
-		txManager:   txManager,
-		accountRepo: accountRepo,
-		eventBus:    eventBus,
-		outboxRepo: outboxRepo,
+		orderRepo:    orderRepo,
+		txManager:    txManager,
+		accountRepo:  accountRepo,
+		eventBus:     eventBus,
+		rawPublisher: rawPublisher,
+		outboxRepo:   outboxRepo,
 	}
 	return s
 }
@@ -56,6 +59,7 @@ func (s *Service) PlaceOrder(ctx context.Context, order *domain.Order) (err erro
 	order.Status = domain.StatusNew
 	order.FilledQuantity = decimal.Zero
 
+	// 将place order和给outbox发消息的操作一起原子性执行
 	var outboxMsg *outbox.Message
 	err = s.txManager.ExecTx(ctx, func(ctx context.Context) error {
 		if err := s.accountRepo.LockFunds(ctx, order.UserID, currencyToLock, amountToLock); err != nil {
@@ -79,12 +83,16 @@ func (s *Service) PlaceOrder(ctx context.Context, order *domain.Order) (err erro
 				Side:           order.Side,
 				Price:          order.Price,
 				Quantity:       order.Quantity,
-				CreatedAt:      order.CreatedAt,
+				CreatedAt:      order.CreatedAt, //修。。。。。
 				AmountLocked:   amountToLock,
 				LockedCurrency: currencyToLock,
-			} 
+			}
 		}
-
+		payload, marshalErr := outbox.MarshalPayload(event)
+		if marshalErr != nil {
+			return fmt.Errorf("序列化 OrderPlacedEvent 失败: %w", marshalErr)
+		}
+		// 定义outboxMsg。。。。。。
 		if insertErr := outbox.InsertMsg(ctx, outboxMsg); insertErr != 0 {
 			return fmt.Errorf("写入outbox失败: %w", insertErr)
 		}
@@ -95,6 +103,15 @@ func (s *Service) PlaceOrder(ctx context.Context, order *domain.Order) (err erro
 	if err != nil {
 		return err
 	}
+
+	// 发消息给kafka，失败则使用上面发给outbox的
+	if s.rawPublisher != nil && outboxMsg != nil {
+		go func(msgId uuid.UUID, msgPayload []byte, topic, partitionKey string) {
+
+		}(outboxMsg.ID, uuid.UUID(outboxMsg.Payload), outboxMsg.Topic, outboxMsg.PartitionKey)
+	}
+
+	return nil
 }
 
 func splitSymbol(symbol string) (base string, quote string, err error) {

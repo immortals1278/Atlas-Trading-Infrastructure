@@ -1,8 +1,11 @@
 package outbox
 
 import (
+	"atlas-trading-infrastructure/internal/infrastructure/db"
 	"context"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,4 +25,32 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
-func (r *Repository) InsertMsg(ctx context.Context, msg Message) error {}
+func (r *Repository) getExecutor(ctx context.Context) dbExecutor {
+	if tx := db.GetTx(ctx); tx != nil {
+		return tx
+	}
+	return r.pool
+}
+
+func (r *Repository) InsertMsg(ctx context.Context, msg Message) error {
+	msg.ID, _ = uuid.NewV7()
+	msg.CreatedAt = time.Now().UnixMilli()
+	msg.Status = StatusPending
+
+	_, err := r.getExecutor(ctx).Exec(ctx, `
+		INSERT INTO outbox_messages
+			(id, aggregate_id, aggregate_type, topic, partition_key, payload, status, retry_count, created_at, published_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		msg.ID,
+		msg.AggregateID,
+		msg.AggregateType,
+		msg.Topic,
+		msg.PartitionKey,
+		msg.Payload,
+		msg.Status,
+		msg.RetryCount,
+		msg.CreatedAt,
+		msg.PublishedAt,
+	)
+	return err
+}
