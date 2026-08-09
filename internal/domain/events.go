@@ -7,6 +7,15 @@ import (
 
 type EventType string
 
+// 定义kafka常数
+const (
+	TopicOrders       = "exchange.orders"
+	TopicSettlements  = "exchange.settlements"
+	TopicTrades       = "exchange.trades"
+	TopicOrderBook    = "exchange.orderbook"
+	TopicOrderUpdates = "exchange.order_updates"
+)
+
 const (
 	EventOrderPlaced          EventType = "order.placed"
 	EventOrderCancelRequested EventType = "order.cancel_requested"
@@ -25,7 +34,6 @@ type OrderPlaceEvent struct {
 	Side           OrderSide       `json:"side"`
 	Price          decimal.Decimal `json:"price"`
 	Quantity       decimal.Decimal `json:"quantity"`
-	CreatedAt      int64           `json:"created_at"`
 	AmountLocked   decimal.Decimal `json:"amount_locked"`
 	LockedCurrency string          `json:"locked_currency"`
 }

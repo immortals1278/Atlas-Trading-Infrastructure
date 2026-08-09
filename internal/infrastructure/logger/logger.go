@@ -10,3 +10,7 @@ var Log *zap.Logger
 func Sync() {
 	_ = Log.Sync()
 }
+
+func Warn(msg string, fields ...zap.Field) {
+	Log.Warn(msg, fields...)
+}
