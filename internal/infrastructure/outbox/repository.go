@@ -32,6 +32,18 @@ func (r *Repository) getExecutor(ctx context.Context) dbExecutor {
 	return r.pool
 }
 
+func (r *Repository) MarkPublishedWorker(ctx context.Context, batch []uuid.UUID) error {
+	if len(batch) == 0 {
+		return nil
+	}
+	_, err := r.getExecutor(ctx).Exec(ctx, `
+	DELETE FROM outbox_messages
+	WHERE id = ANY($1)`,
+		batch)
+
+	return err
+}
+
 func (r *Repository) InsertMsg(ctx context.Context, msg Message) error {
 	msg.ID, _ = uuid.NewV7()
 	msg.CreatedAt = time.Now().UnixMilli()

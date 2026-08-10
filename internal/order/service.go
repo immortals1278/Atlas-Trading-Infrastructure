@@ -44,6 +44,41 @@ func NewService(
 	return s
 }
 
+func (s *Service) batchMarkPublishedWorker() {
+	ticker := time.NewTicker(50 * time.Millisecond) // 每50ms发一个信号
+	defer ticker.Stop()
+
+	var batch []uuid.UUID
+	for {
+		select {
+		case id := <-s.publishedMsgChan:
+			batch = append(batch, id)
+			if len(batch) >= 200 { //消息数量足够多也触发
+				s.flushBatch(&batch)
+			}
+		case <-ticker.C:
+			s.flushBatch(&batch)
+		}
+	}
+}
+
+func (s *Service) flushBatch(batch *[]uuid.UUID) {
+	if len(*batch) == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second) //两秒超时
+	defer cancel()
+
+	if err := s.outboxRepo.MarkPublishedWorker(ctx, *batch); err != nil {
+		logger.Log.Warn("批量标记outbox失败",
+			zap.Error(err),
+		)
+	}
+
+	*batch = (*batch)[:0] //清空切片但保留容量，避免内存再次分配
+}
+
 func (s *Service) PlaceOrder(ctx context.Context, order *domain.Order) (err error) {
 	order.Symbol = strings.ToUpper(order.Symbol)
 	order.Price = order.Price.Round(8)
