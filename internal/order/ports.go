@@ -16,6 +16,7 @@ type OrderRepository interface {
 	CreateOrder(ctx context.Context, order *domain.Order) error
 	GetOrder(ctx context.Context, id uuid.UUID) (*domain.Order, error)
 	UpdateOrder(ctx context.Context, order *domain.Order) error
+	GetOrderForUpdate(ctx context.Context, id uuid.UUID) (*domain.Order, error)
 }
 
 type AccountRepository interface {

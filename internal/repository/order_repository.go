@@ -29,6 +29,17 @@ func (r *PostgresRepository) GetOrder(ctx context.Context, id uuid.UUID) (*domai
 	return scanOrder(row)
 }
 
+// FOR UPDATE 悲观锁在事务中锁定查询到的数据行，防止其他事务同时修改，保证数据一致性。
+func (r *PostgresRepository) GetOrderForUpdate(ctx context.Context, id uuid.UUID) (*domain.Order, error) {
+	executor := r.GetExecutor(ctx)
+	query := `
+		SELECT id, userid, symbol, side, price, quantity, filled_quantity, status
+		FROM orders WHERE id = $1
+		FOR UPDATE`
+	row := executor.QueryRow(ctx, query, id)
+	return scanOrder(row)
+}
+
 func (r *PostgresRepository) UpdateOrder(ctx context.Context, order *domain.Order) error {
 	executor := r.GetExecutor(ctx)
 	query := `

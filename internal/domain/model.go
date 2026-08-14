@@ -17,7 +17,7 @@ const (
 	SideBuy  OrderSide = 1
 	SideSell OrderSide = 2
 
-	StatusNew             OrderStatus = 1 // 新訂單
+	StatusNew             OrderStatus = 1 // 新订单
 	StatusPartiallyFilled OrderStatus = 2 // 部分成交
 	StatusFilled          OrderStatus = 3 // 完全成交
 	StatusCanceled        OrderStatus = 4 // 已取消

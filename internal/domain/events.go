@@ -37,3 +37,11 @@ type OrderPlaceEvent struct {
 	AmountLocked   decimal.Decimal `json:"amount_locked"`
 	LockedCurrency string          `json:"locked_currency"`
 }
+
+type OrderCancelRequestedEvent struct {
+	EventType EventType `json:"event_type"`
+	Symbol    string    `json:"symbol"`
+	OrderID   uuid.UUID `json:"order_id"`
+	Side      OrderSide `json:"side"`
+	UserID    uuid.UUID `json:"user_id"`
+}
