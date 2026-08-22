@@ -3,6 +3,7 @@ package outbox
 import (
 	"atlas-trading-infrastructure/internal/infrastructure/db"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -65,4 +66,36 @@ func (r *Repository) InsertMsg(ctx context.Context, msg Message) error {
 		msg.PublishedAt,
 	)
 	return err
+}
+
+func (r *Repository) BatchInsert(ctx context.Context, msgs []*Message) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+
+	tx := db.GetTx(ctx)
+	if tx == nil {
+		return fmt.Errorf("BatchInsert must be called in ExecTx")
+	}
+
+	rows := make([][]any, 0, len(msgs))
+	for _, msg := range msgs {
+		msg.ID, _ = uuid.NewV7()
+		msg.CreatedAt = time.Now().UnixMilli()
+		msg.Status = StatusPending
+
+		rows = append(rows, []any{
+			msg.ID, msg.AggregateID, msg.AggregateType, msg.Topic, msg.PartitionKey, msg.Payload, msg.Status, msg.RetryCount, msg.CreatedAt, msg.PublishedAt,
+		})
+	}
+
+	_, err := tx.CopyFrom(
+		ctx,
+		pgx.Identifier{"outbox_messages"},
+		[]string{"id", "aggregate_id", "aggregate_type", "topic", "partition_key", "payload", "status", "retry_count", "created_at", "published_at"},
+		pgx.CopyFromRows(rows),
+	)
+
+	return err
+
 }

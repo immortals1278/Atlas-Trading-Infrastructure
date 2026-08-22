@@ -14,6 +14,7 @@ type DBTransaction interface {
 
 type OrderRepository interface {
 	CreateOrder(ctx context.Context, order *domain.Order) error
+	BatchCreateOrders(ctx context.Context, orders []*domain.Order) error
 	GetOrder(ctx context.Context, id uuid.UUID) (*domain.Order, error)
 	UpdateOrder(ctx context.Context, order *domain.Order) error
 	GetOrderForUpdate(ctx context.Context, id uuid.UUID) (*domain.Order, error)
@@ -21,4 +22,11 @@ type OrderRepository interface {
 
 type AccountRepository interface {
 	LockFunds(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error
+	BatchLockFunds(ctx context.Context, lockFunds map[uuid.UUID]map[string]decimal.Decimal) error
+}
+
+type OrderService interface {
+	PlaceOrder(ctx context.Context, order *domain.Order) error
+	BatchPlaceOrders(ctx context.Context, orders []*domain.Order) error
+	CancelOrder(ctx context.Context, orderID, userID uuid.UUID) error
 }

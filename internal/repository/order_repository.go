@@ -2,9 +2,12 @@ package repository
 
 import (
 	"atlas-trading-infrastructure/internal/domain"
+	"atlas-trading-infrastructure/internal/infrastructure/db"
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 func (r *PostgresRepository) CreateOrder(ctx context.Context, order *domain.Order) error {
@@ -16,6 +19,33 @@ func (r *PostgresRepository) CreateOrder(ctx context.Context, order *domain.Orde
 	_, err := executor.Exec(ctx, query, order.ID, order.Symbol, order.Side,
 		order.Price, order.Quantity, order.FilledQuantity, order.Status)
 
+	return err
+}
+
+func (r *PostgresRepository) BatchCreateOrders(ctx context.Context, orders []*domain.Order) error {
+	if len(orders) == 0 {
+		return nil
+	}
+
+	tx := db.GetTx(ctx)
+	if tx == nil {
+		return fmt.Errorf("BatchCreateOrders must be called within ExecTx")
+	} // 确保 BatchCreateOrders 方法必须在事务内部调用
+
+	rows := make([][]any, 0, len(orders))
+	for _, order := range orders {
+		rows = append(rows, []any{
+			order.ID, order.UserID, order.Symbol, order.Side,
+			order.Price, order.Quantity, order.FilledQuantity, order.Status,
+		})
+	}
+
+	_, err := tx.CopyFrom(
+		ctx,
+		pgx.Identifier{"orders"},
+		[]string{"id", "user_id", "symbol", "side", "price", "quantity", "filled_quantity", "status"},
+		pgx.CopyFromRows(rows),
+	)
 	return err
 }
 

@@ -191,6 +191,10 @@ func (s *Service) BacthPlaceOrders(ctx context.Context, orders []*domain.Order) 
 		}
 
 		currencyToLock, amountToLock, err := s.calculateLockAmount(order)
+		if err != nil {
+			return fmt.Errorf("计算冻结金额失败： %w", err)
+		}
+
 		if lockFunds[order.UserID] == nil {
 			lockFunds[order.UserID] = make(map[string]decimal.Decimal)
 		}
@@ -205,66 +209,45 @@ func (s *Service) BacthPlaceOrders(ctx context.Context, orders []*domain.Order) 
 		order.Status = domain.StatusNew
 		order.FilledQuantity = decimal.Zero
 
-		// 将place order和给outbox发消息的操作一起原子性执行
-		err = s.txManager.ExecTx(ctx, func(ctx context.Context) error {
-			if err := s.accountRepo.LockFunds(ctx, order.UserID, currencyToLock, amountToLock); err != nil {
-				return fmt.Errorf("冻结失败：%w", err)
+		if s.outboxRepo != nil && s.eventBus != nil {
+			event := &domain.OrderPlaceEvent{
+				EventType:      domain.EventOrderPlaced,
+				Symbol:         order.Symbol,
+				OrderID:        order.ID,
+				UserID:         order.UserID,
+				Side:           order.Side,
+				Price:          order.Price,
+				Quantity:       order.Quantity,
+				AmountLocked:   amountToLock,
+				LockedCurrency: currencyToLock,
+			}
+			payload, marshalErr := outbox.MarshalPayload(event)
+			if marshalErr != nil {
+				return fmt.Errorf("序列化 OrderPlacedEvent 失败: %w", marshalErr)
 			}
 
-			if err := s.orderRepo.CreateOrder(ctx, order); err != nil {
-				return fmt.Errorf("创建订单失败: %w", err)
+			msg := &outbox.Message{
+				AggregateID:   order.ID.String(),
+				AggregateType: "order_placed",
+				Topic:         domain.TopicOrders,
+				PartitionKey:  order.Symbol,
+				Payload:       payload,
 			}
-
-			if !domain.IsSymbolAllowed(order.Symbol) {
-				return fmt.Errorf("不允许的交易对：%w", err)
-			}
-
-			if s.outboxRepo != nil && s.eventBus != nil {
-				event := &domain.OrderPlaceEvent{
-					EventType:      domain.EventOrderPlaced,
-					Symbol:         order.Symbol,
-					OrderID:        order.ID,
-					UserID:         order.UserID,
-					Side:           order.Side,
-					Price:          order.Price,
-					Quantity:       order.Quantity,
-					AmountLocked:   amountToLock,
-					LockedCurrency: currencyToLock,
-				}
-				payload, marshalErr := outbox.MarshalPayload(event)
-				if marshalErr != nil {
-					return fmt.Errorf("序列化 OrderPlacedEvent 失败: %w", marshalErr)
-				}
-
-				msg := &outbox.Message{
-					AggregateID:   order.ID.String(),
-					AggregateType: "order_placed",
-					Topic:         domain.TopicOrders,
-					PartitionKey:  order.Symbol,
-					Payload:       payload,
-				}
-				outboxMsgs = append(outboxMsgs, msg)
-
-				if insertErr := s.outboxRepo.InsertMsg(ctx, *msg); insertErr != nil {
-					return fmt.Errorf("写入outbox失败: %w", insertErr)
-				}
-			}
-			return nil
-		})
+			outboxMsgs = append(outboxMsgs, msg)
+		}
 	}
 
-	// 写这几个数据库逻辑
-	//单事务批量提交换取高吞吐和强一致
+	// 单事务批量提交换取高吞吐和强一致
 	err := s.txManager.ExecTx(ctx, func(txCtx context.Context) error {
 		if err := s.accountRepo.BatchLockFunds(txCtx, lockFunds); err != nil {
-			return fmt.Errorf("批次鎖定期資金失敗: %w", err)
+			return fmt.Errorf("批量锁定资金失败:%w", err)
 		}
 		if err := s.orderRepo.BatchCreateOrders(txCtx, orders); err != nil {
-			return fmt.Errorf("批次建立訂單失敗: %w", err)
+			return fmt.Errorf("批量建立订单失败: %w", err)
 		}
 		if len(outboxMsgs) > 0 {
 			if err := s.outboxRepo.BatchInsert(txCtx, outboxMsgs); err != nil {
-				return fmt.Errorf("批次寫入 Outbox 失敗: %w", err)
+				return fmt.Errorf("批量写入outbox失败: %w", err)
 			}
 		}
 		return nil
@@ -297,6 +280,7 @@ func (s *Service) BacthPlaceOrders(ctx context.Context, orders []*domain.Order) 
 	return nil
 }
 
+// 撮合引擎受收到请求后更改订单状态，保证撮合簿一致
 func (s *Service) CancelOrder(ctx context.Context, orderID, userID uuid.UUID) (err error) {
 	orderPreCheck, err := s.orderRepo.GetOrder(ctx, orderID)
 	if err != nil {
