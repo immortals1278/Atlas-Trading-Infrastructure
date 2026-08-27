@@ -26,11 +26,62 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
+func (r *Repository) WithTx(ctx context.Context, fn func(context.Context) error) error {
+	return pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+		txCtx := context.WithValue(ctx, db.TxKey, tx)
+		return fn(txCtx)
+	})
+}
+
 func (r *Repository) getExecutor(ctx context.Context) dbExecutor {
 	if tx := db.GetTx(ctx); tx != nil {
 		return tx
 	}
 	return r.pool
+}
+
+// 给热路径 gracePeriod 的时间将已发送的信息从 pending 改成 published
+func (r *Repository) FetchingPending(ctx context.Context, batchSize int, gracePeriod time.Duration) ([]*Message, error) {
+
+	threshold := time.Now().Add(-gracePeriod).UnixMilli()
+	rows, err := r.getExecutor(ctx).Query(ctx, `
+		SELECT id, aggregate_id, aggregate_type, topic, partition_key, payload, status, retry_count, created_at, published_at
+		FROM outbox_messages
+		WHERE status = $1 AND created_at <= $2
+		ORDER BY created_at ASC
+		LIMIT $3
+		FOR UPDATE SKIP LOCKED`,
+		StatusPending, threshold, batchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var msgs []*Message
+	for rows.Next() {
+		m := &Message{}
+		err := rows.Scan(
+			&m.ID, &m.AggregateID, &m.AggregateType,
+			&m.Topic, &m.PartitionKey, &m.Payload,
+			&m.Status, &m.RetryCount, &m.CreatedAt, &m.PublishedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, m)
+	}
+	return msgs, rows.Err()
+}
+
+// 更新重复次数
+func (r *Repository) IncrementRetry(ctx context.Context, id uuid.UUID) error {
+	_, err := r.getExecutor(ctx).Exec(ctx, `
+		UPDATE outbox_messages
+		SET retry_count = retry_count + 1
+		WHERE id = $1`,
+		id,
+	)
+	return err
 }
 
 func (r *Repository) MarkPublishedWorker(ctx context.Context, batch []uuid.UUID) error {

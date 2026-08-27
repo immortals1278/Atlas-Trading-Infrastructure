@@ -4,16 +4,22 @@ import (
 	"atlas-trading-infrastructure/internal/infrastructure/logger"
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 
 	"go.uber.org/zap"
 )
 
 type WorkerRepository interface {
 	WithTx(ctx context.Context, fn func(context.Context) error) error //把回调函数包进一个数据库事务里执行。
+	FetchingPending(ctx context.Context, batchSize int, gracePeriod time.Duration) ([]*Message, error)
+	MarkPublishedWorker(ctx context.Context, ids []uuid.UUID) error
+	IncrementRetry(ctx context.Context, id uuid.UUID) error
 }
 
-var _ WorkerRepository = (*Repository)(nil) //没实现
+var _ WorkerRepository = (*Repository)(nil)
 
 // 解耦worker与kafka
 type Publisher interface {
@@ -55,9 +61,41 @@ func (w *Worker) Start(ctx context.Context) {
 }
 
 // 进行一次批量扫描并发送
+
 func (w *Worker) process(ctx context.Context) {
 
-	err := w.repo.WithTx(ctx, func(txCtx context.Context) error {})
+	err := w.repo.WithTx(ctx, func(txCtx context.Context) error {
+		msgs, err := w.repo.FetchingPending(txCtx, w.batchSize, 5*time.Second)
+		if err != nil {
+			return fmt.Errorf("获取pending信息失败: %w", err)
+		}
+		SuccessID := make([]uuid.UUID, 0, len(msgs))
+
+		for _, msg := range msgs {
+			publishErr := w.publisher.PublishRaw(ctx, msg.Topic, msg.PartitionKey, msg.Payload)
+			if publishErr != nil {
+				logger.Log.Warn("Outbox Worker 发送信息到 kafka 失败",
+					zap.String("id", msg.ID.String()),
+					zap.String("topic", msg.Topic),
+					zap.Error(publishErr),
+				)
+				if err := w.repo.IncrementRetry(txCtx, msg.ID); err != nil {
+					return fmt.Errorf("增加 retry_count 失敗: %w", err)
+				}
+				continue
+			}
+			SuccessID = append(SuccessID, msg.ID)
+		}
+
+		if len(SuccessID) == 0 {
+			return nil
+		}
+
+		if err := w.repo.MarkPublishedWorker(ctx, SuccessID); err != nil {
+			return fmt.Errorf("已发送的outboxMsg清除失败:%w", err)
+		}
+		return nil
+	})
 
 	if err != nil {
 		logger.Log.Error("outbox worker 批量处理失败", zap.Error(err))
