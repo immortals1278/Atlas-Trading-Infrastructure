@@ -38,10 +38,24 @@ type OrderPlaceEvent struct {
 	LockedCurrency string          `json:"locked_currency"`
 }
 
+type OrderCanceledEvent struct {
+	EventType    EventType `json:"event_type"`
+	Symbol       string    `json:"symbol"`
+	OrderID      uuid.UUID `json:"order_id"`
+	UserID       uuid.UUID `json:"user_id"`
+	FencingToken int64     `json:"fencing_token"` // 不知道有什么用
+}
+
 type OrderCancelRequestedEvent struct {
 	EventType EventType `json:"event_type"`
 	Symbol    string    `json:"symbol"`
 	OrderID   uuid.UUID `json:"order_id"`
 	Side      OrderSide `json:"side"`
 	UserID    uuid.UUID `json:"user_id"`
+}
+
+type OrderUpdatedEvent struct {
+	EventType EventType `json:"event_type"`
+	Symbol    string    `json:"symbol"`
+	Order     *Order    `json:"order"`
 }
