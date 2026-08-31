@@ -99,10 +99,12 @@ func (s *EventSubscriber) handleOrderCanceled(ctx context.Context, event *domain
 		}
 
 		orderSymbol = order.Symbol
-		copyOrder = *order
+		snapshot := *order    // 拷贝当前订单状态
+		copyOrder = &snapshot // 把副本的地址赋给指针变量
+
 		return nil
 	})
-	// 过时错误不处理逻辑没写
+	// 过时错误不处理逻辑没写 撮合引擎相关
 	// 取消成功发kafka
 	if err == nil && copyOrder != nil && s.eventBus != nil {
 		updateEvent := &domain.OrderUpdatedEvent{

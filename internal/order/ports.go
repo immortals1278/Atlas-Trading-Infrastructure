@@ -28,6 +28,7 @@ type TradeRepository interface {
 type AccountRepository interface {
 	LockFunds(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error
 	BatchLockFunds(ctx context.Context, lockFunds map[uuid.UUID]map[string]decimal.Decimal) error
+	UnlockFunds(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error
 }
 
 type OrderService interface {

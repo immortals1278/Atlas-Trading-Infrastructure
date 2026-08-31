@@ -12,6 +12,7 @@ func (r *PostgresRepository) LockFunds(ctx context.Context, userid uuid.UUID, cu
 	executor := r.GetExecutor(ctx)
 	query := `
 	UPDATE accounts
+	SET balance = balance - $1, locked = locked + $1,
 	WHERE userid = $2 AND currency = $3 AND balance >= $1`
 
 	tag, err := executor.Exec(ctx, query, amount, userid, currency)
@@ -73,6 +74,21 @@ func (r *PostgresRepository) BatchLockFunds(ctx context.Context, lockFunds map[u
 				return domain.ErrInsufficientFunds
 			}
 		}
+	}
+
+	return nil
+}
+
+func (r *PostgresRepository) UnlockFunds(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error {
+	executor := r.GetExecutor(ctx)
+	query := `
+	UPDATE accounts
+	SET balance = balance + $1, locked = locked - $1,
+	WHERE userid = $2 AND currency = $3 AND balance >= $1`
+
+	_, err := executor.Exec(ctx, query, amount, userID, currency)
+	if err != nil {
+		return err
 	}
 
 	return nil
