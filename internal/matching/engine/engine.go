@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"atlas-trading-infrastructure/internal/domain"
 	"sync"
 	"time"
 
@@ -27,10 +26,10 @@ func (e *Engine) Process(order *Order) []*Trade {
 
 	var trades []*Trade
 
-	if order.Side == domain.SideBuy {
+	if order.Side == SideBuy {
 		trades = e.matchBuyOrder(order)
 	}
-	if order.Side == domain.SideSell {
+	if order.Side == SideSell {
 		trades = e.matchSellOrder(order)
 	}
 
@@ -98,4 +97,64 @@ func (e *Engine) matchBuyOrder(buyOrder *Order) []*Trade {
 }
 
 // 卖单撮合逻辑
-func (e *Engine) matchSellOrder(order *Order) []*Trade {}
+func (e *Engine) matchSellOrder(sellOrder *Order) []*Trade {
+	var trades []*Trade
+	for {
+		bestBid := e.orderbook.BestBid()
+		if bestBid == nil {
+			break
+		}
+
+		// 避免左手换右手
+		if sellOrder.Side == bestBid.Side {
+			sellOrder.Quantity = decimal.Zero
+			break
+		}
+
+		// 检查价格是否匹配
+		if sellOrder.Price.GreaterThan(bestBid.Price) {
+			break
+		}
+
+		// 计算成交数量
+		matchQty := sellOrder.Quantity
+		if bestBid.Quantity.LessThan(matchQty) {
+			matchQty = bestBid.Quantity
+		}
+
+		// 记录成交
+		tradeID, _ := uuid.NewV7()
+		trade := &Trade{
+			ID:           tradeID,
+			Symbol:       e.orderbook.Symbol,
+			MakerOrderID: bestBid.Id,
+			TakerOrderID: sellOrder.Id,
+			Price:        bestBid.Price, // price用挂单的价格
+			Quantity:     matchQty,
+			CreatedAt:    time.Now().UnixMilli(),
+		}
+		trades = append(trades, trade)
+
+		bestBid.Quantity.Sub(matchQty)
+		sellOrder.Quantity.Sub(matchQty)
+
+		// 如果挂单完全成交，从orderbook移除
+		if bestBid.Quantity.IsZero() {
+			e.orderbook.RemoveAskOrder()
+		}
+
+		// 如果吃单完全成交，结束
+		if sellOrder.Quantity.IsZero() {
+			break
+		}
+	}
+
+	return trades
+}
+
+func (e *Engine) Cancel(orderID uuid.UUID, side OrderSide) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.orderbook.RemoveOrder(orderID, side)
+}

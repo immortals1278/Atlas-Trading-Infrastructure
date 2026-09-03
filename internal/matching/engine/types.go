@@ -1,16 +1,21 @@
 package engine
 
 import (
-	"atlas-trading-infrastructure/internal/domain"
-
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+)
+
+type OrderSide int16
+
+const (
+	SideBuy  OrderSide = 1
+	SideSell OrderSide = 2
 )
 
 type Order struct {
 	Id       uuid.UUID
 	UserID   uuid.UUID
-	Side     domain.OrderSide
+	Side     OrderSide
 	Price    decimal.Decimal
 	Quantity decimal.Decimal
 }
@@ -26,7 +31,19 @@ type Trade struct {
 
 }
 
-func NewOrder(Id uuid.UUID, UserID uuid.UUID, Side domain.OrderSide, Price decimal.Decimal, Quantity decimal.Decimal) *Order {
+type OrderBookLevel struct {
+	Price    decimal.Decimal `json:"price"`
+	Quantity decimal.Decimal `json:"quantity"`
+}
+
+type OrderBookSnapshot struct {
+	Symbol       string           `json:"symbol"`
+	Bids         []OrderBookLevel `json:"bids"`
+	Asks         []OrderBookLevel `json:"asks"`
+	FencingToken int64            `json:"fencing_token"` // 防脑裂令牌
+}
+
+func NewOrder(Id uuid.UUID, UserID uuid.UUID, Side OrderSide, Price decimal.Decimal, Quantity decimal.Decimal) *Order {
 	return &Order{
 		Id:       Id,
 		UserID:   UserID,

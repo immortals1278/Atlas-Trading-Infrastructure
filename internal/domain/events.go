@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"atlas-trading-infrastructure/internal/matching/engine"
+
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
@@ -26,7 +28,7 @@ const (
 	EventOrderUpdated         EventType = "order.updated"
 )
 
-type OrderPlaceEvent struct {
+type OrderPlacedEvent struct {
 	EventType      EventType       `json:"event_type"`
 	Symbol         string          `json:"symbol"`
 	OrderID        uuid.UUID       `json:"order_id"`
@@ -58,4 +60,15 @@ type OrderUpdatedEvent struct {
 	EventType EventType `json:"event_type"`
 	Symbol    string    `json:"symbol"`
 	Order     *Order    `json:"order"`
+}
+
+type SettlementRequestedEvent struct {
+	EventType      EventType       `json:"event_type"`
+	Symbol         string          `json:"symbol"`
+	TakerOrderID   uuid.UUID       `json:"taker_order_id"`
+	AmountLocked   decimal.Decimal `json:"amount_locked"`
+	LockedCurrency string          `json:"locked_currency"`
+	RemainingQty   decimal.Decimal `json:"remaining_qty"`
+	Trades         []*engine.Trade `json:"trades"`
+	FencingToken   int64           `json:"fencing_token"` // 判断是否来自合法的 Leader
 }

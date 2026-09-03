@@ -1,8 +1,9 @@
 package engine
 
 import (
-	"atlas-trading-infrastructure/internal/domain"
 	"sort"
+
+	"github.com/google/uuid"
 )
 
 type Orderbook struct {
@@ -20,7 +21,7 @@ func NewOrderbook(Symbol string) *Orderbook {
 }
 
 func (ob *Orderbook) AddOrder(order *Order) {
-	if order.Side == domain.SideBuy {
+	if order.Side == SideBuy {
 		ob.bids = append(ob.bids, order)
 		// 降序
 		sort.SliceStable(ob.bids, func(i, j int) bool {
@@ -48,4 +49,32 @@ func (ob *Orderbook) RemoveAskOrder() {
 		ob.asks[0] = nil // 避免内存泄露
 		ob.asks = ob.asks[1:]
 	}
+}
+
+func (ob *Orderbook) BestBid() (order *Order) {
+	if len(ob.bids) == 0 {
+		return nil
+	}
+	return ob.bids[0]
+}
+
+func (ob *Orderbook) RemoveOrder(orderID uuid.UUID, side OrderSide) bool {
+	if side == SideBuy {
+		for i, order := range ob.bids {
+			if order.Id == orderID {
+				ob.bids[i] = nil
+				ob.bids = append(ob.bids[:i], ob.bids[i+1:]...)
+				return true
+			}
+		}
+	} else {
+		for i, order := range ob.asks {
+			if order.Id == orderID {
+				ob.asks[i] = nil
+				ob.asks = append(ob.asks[:i], ob.asks[i+1:]...)
+				return true
+			}
+		}
+	}
+	return false
 }
