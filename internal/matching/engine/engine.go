@@ -152,9 +152,9 @@ func (e *Engine) matchSellOrder(sellOrder *Order) []*Trade {
 	return trades
 }
 
-func (e *Engine) Cancel(orderID uuid.UUID, side OrderSide) {
+func (e *Engine) Cancel(orderID uuid.UUID, side OrderSide) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	e.orderbook.RemoveOrder(orderID, side)
+	return e.orderbook.RemoveOrder(orderID, side)
 }

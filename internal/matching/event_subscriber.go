@@ -104,7 +104,7 @@ func (s *Subscriber) HandleOrderPlaced(ctx context.Context, event *domain.OrderP
 				break
 			}
 
-			logger.Warn("发送settlementEvent失败，1秒后尝试",
+			logger.Warn("发TradeExecutedEvent失败，1秒后尝试",
 				zap.String("symbol", event.Symbol),
 				zap.Error(err),
 			)
@@ -112,10 +112,46 @@ func (s *Subscriber) HandleOrderPlaced(ctx context.Context, event *domain.OrderP
 		}
 	}
 
-	// 更新redia，redis相关
+	// TODO更新redia，redis相关
 	return nil
 }
 
 func (s *Subscriber) HandleOrderCancelRequested(ctx context.Context, event *domain.OrderCancelRequestedEvent) error {
+	var Side engine.OrderSide
+	if event.Side == domain.SideBuy {
+		Side = engine.SideBuy
+	} else {
+		Side = engine.SideSell
+	}
 
+	engine := s.manager.GetEngine(event.Symbol)
+	canceled := engine.Cancel(event.OrderID, Side)
+
+	if canceled {
+		if s.eventBus != nil {
+			canceledEvent := &domain.OrderCanceledEvent{
+				EventType:    domain.EventOrderCanceled,
+				Symbol:       event.Symbol,
+				OrderID:      event.OrderID,
+				UserID:       event.UserID,
+				FencingToken: s.fencingToken.Load(),
+			}
+
+			for {
+				err := s.eventBus.Publish(ctx, domain.TopicSettlements, event.Symbol, canceledEvent)
+				if err == nil {
+					break
+				}
+				logger.Warn("发送OrderCanceledEvent失败，1秒后尝试",
+					zap.String("order_id", event.OrderID.String()),
+					zap.Error(err),
+				)
+
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}
+
+	// 更新redis
+	return nil
 }
