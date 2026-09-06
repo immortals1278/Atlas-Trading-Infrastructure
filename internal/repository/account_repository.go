@@ -3,10 +3,22 @@ package repository
 import (
 	"atlas-trading-infrastructure/internal/domain"
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
+
+func (r *PostgresRepository) UpdateBalance(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error {
+	executor := r.GetExecutor(ctx)
+	query := `
+	UPDATE accounts
+	SET balance = balance + $1, updated_at = $4
+	WHERE userid = $2 AND currency = $3`
+	_, err := executor.Exec(ctx, query, amount, userID, currency, time.Now().UnixMilli)
+
+	return err
+}
 
 func (r *PostgresRepository) LockFunds(ctx context.Context, userid uuid.UUID, currency string, amount decimal.Decimal) error {
 	executor := r.GetExecutor(ctx)

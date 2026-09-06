@@ -2,6 +2,7 @@ package order
 
 import (
 	"atlas-trading-infrastructure/internal/domain"
+	"atlas-trading-infrastructure/internal/matching/engine"
 	"context"
 
 	"github.com/google/uuid"
@@ -21,11 +22,12 @@ type OrderRepository interface {
 }
 
 type TradeRepository interface {
-	CreateTrade(ctx context.Context, trade *engine.Trade) error //撮合引擎还没写
+	CreateTrade(ctx context.Context, trade *engine.Trade) error
 	TradeExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type AccountRepository interface {
+	UpdateBalance(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error
 	LockFunds(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error
 	BatchLockFunds(ctx context.Context, lockFunds map[uuid.UUID]map[string]decimal.Decimal) error
 	UnlockFunds(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error

@@ -3,20 +3,30 @@ package order
 import (
 	"atlas-trading-infrastructure/internal/domain"
 	"atlas-trading-infrastructure/internal/infrastructure/logger"
+	"atlas-trading-infrastructure/internal/matching/engine"
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 )
+
+type AccountUpdate struct {
+	UserID   uuid.UUID
+	Currency string
+	Amount   decimal.Decimal // 余额变动
+	Unlock   decimal.Decimal // 解锁金额
+}
 
 type EventSubscriber struct {
 	orderRepo   OrderRepository
 	accountRepo AccountRepository
 	tradeRepo   TradeRepository
-	txManager   DBTransaction // 差防脑裂机制没实现
+	txManager   DBTransaction
 	eventBus    domain.EventPublisher
 }
 
@@ -46,7 +56,13 @@ func (s *EventSubscriber) HandleEvents(ctx context.Context, key, value []byte) (
 	}
 
 	switch envelope.EventType {
-	case domain.EventSettlementRequested: //撮合成功后在db内结算
+	//撮合成功后在db内结算
+	case domain.EventSettlementRequested:
+		var event domain.SettlementRequestedEvent
+		if err := json.Unmarshal(value, &event); err != nil {
+			return fmt.Errorf("解析SettlementRequestedEvent失败: %w", err)
+		}
+		return s.handleSettlementRequestedEvent(ctx, &event)
 	case domain.EventOrderCanceled:
 		var event domain.OrderCanceledEvent
 		if err := json.Unmarshal(value, &event); err != nil {
@@ -59,6 +75,191 @@ func (s *EventSubscriber) HandleEvents(ctx context.Context, key, value []byte) (
 	}
 }
 
+func (s *EventSubscriber) handleSettlementRequestedEvent(ctx context.Context, event *domain.SettlementRequestedEvent) error {
+
+	err := s.executeSettlementTx(ctx, event)
+	return err
+}
+
+func (s *EventSubscriber) executeSettlementTx(ctx context.Context, event *domain.SettlementRequestedEvent) error {
+	var updateOrders []*domain.Order
+
+	err := s.txManager.ExecTx(ctx, func(ctx context.Context) error {
+		if event.FencingToken > 0 {
+			//TODO leader相关
+		}
+
+		makerOrderIDsMap := make(map[uuid.UUID]bool)
+		for _, order := range event.Trades {
+			makerOrderIDsMap[order.MakerOrderID] = true
+		}
+		//只有一个吃单
+		makerOrderIDsMap[event.TakerOrderID] = true
+
+		var allOrderIDs []uuid.UUID
+		for id := range makerOrderIDsMap {
+			allOrderIDs = append(allOrderIDs, id)
+		}
+
+		//排序防止死锁
+		sort.Slice(allOrderIDs, func(i, j int) bool {
+			return allOrderIDs[i].String() < allOrderIDs[j].String()
+		})
+
+		lockedOrders := make(map[uuid.UUID]*domain.Order)
+
+		// 锁定对应订单
+		for _, id := range allOrderIDs {
+			lockedOrder, err := s.orderRepo.GetOrderForUpdate(ctx, id)
+			if err != nil {
+				return fmt.Errorf("锁定订单失败,订单: %s : %w", id, err)
+			}
+			lockedOrders[id] = lockedOrder
+		}
+
+		takerOrder := lockedOrders[event.TakerOrderID]
+
+		allAccountUpdates := make([]AccountUpdate, 0)
+
+		for _, trade := range event.Trades {
+			makerOrder := lockedOrders[trade.MakerOrderID]
+
+			// 更新挂单成交量
+			makerOrder.FilledQuantity = makerOrder.FilledQuantity.Add(trade.Quantity)
+			if makerOrder.FilledQuantity.Equal(makerOrder.Quantity) {
+				makerOrder.Status = domain.StatusFilled
+			} else if makerOrder.FilledQuantity.GreaterThan(decimal.Zero) {
+				makerOrder.Status = domain.StatusPartiallyFilled
+			}
+			makerOrder.UpdatedAt = time.Now().UnixMilli()
+
+			// 计算结算资金
+			updates, err := s.calculateTradesSettlement(trade, takerOrder, makerOrder)
+			if err != nil {
+				return fmt.Errorf("计算结算资金失败: %w", err)
+			}
+			allAccountUpdates = append(allAccountUpdates, updates...)
+
+			takerOrder.FilledQuantity = takerOrder.FilledQuantity.Add(trade.Quantity)
+		}
+
+		var refundAmount decimal.Decimal // 取消订单要退的款
+		if takerOrder.FilledQuantity.Equal(takerOrder.Quantity) {
+			takerOrder.Status = domain.StatusFilled
+		} else if event.RemainingQty.IsZero() { // 吃单被取消
+			takerOrder.Status = domain.StatusCanceled
+			canceledQty := takerOrder.Quantity.Sub(takerOrder.FilledQuantity)
+			if takerOrder.Side == domain.SideBuy {
+				refundAmount = canceledQty.Mul(takerOrder.Price)
+			} else {
+				refundAmount = canceledQty
+			}
+		} else if takerOrder.FilledQuantity.GreaterThan(decimal.Zero) {
+			takerOrder.Status = domain.StatusPartiallyFilled
+		}
+
+		if refundAmount.GreaterThan(decimal.Zero) {
+			allAccountUpdates = append(allAccountUpdates, AccountUpdate{
+				UserID:   takerOrder.UserID,
+				Currency: event.LockedCurrency,
+				Unlock:   refundAmount.Round(8),
+			})
+		}
+
+		for _, id := range allOrderIDs {
+			updateOrder := lockedOrders[id]
+			updateOrder.UpdatedAt = time.Now().UnixMilli()
+			if err := s.orderRepo.UpdateOrder(ctx, updateOrder); err != nil {
+				return fmt.Errorf("更新订单失败: err", err)
+			}
+			updateOrders = append(updateOrders, cloneOrder(updateOrder))
+		}
+
+		for _, trade := range event.Trades {
+			if err := s.tradeRepo.CreateTrade(ctx, trade); err != nil {
+				return fmt.Errorf("建立成交记录失败: err", err)
+			}
+		}
+
+		// 结算用户数据
+		aggregatedUpdates := aggregateAndSortAccountUpdate(allAccountUpdates)
+		for _, update := range aggregatedUpdates {
+			if update.Unlock.GreaterThan(decimal.Zero) {
+				if err := s.accountRepo.UnlockFunds(ctx, update.UserID, update.Currency, update.Amount); err != nil {
+					return fmt.Errorf("解锁资金失败: err", err)
+				}
+			}
+			if !update.Amount.IsZero() {
+				if err := s.accountRepo.UpdateBalance(ctx, update.UserID, update.Currency, update.Amount); err != nil {
+					return fmt.Errorf("更新用户余额失败: ", err)
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if s.eventBus != nil {
+		for _, order := range updateOrders {
+			event := &domain.OrderUpdatedEvent{
+				EventType: domain.EventOrderUpdated,
+				Symbol:    order.Symbol,
+				Order:     order,
+			}
+
+			publishCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			if err := s.eventBus.Publish(publishCtx, domain.TopicOrderUpdates, order.Symbol, event); err != nil {
+				logger.Error("发布orderUpdatedEvent失败", zap.Error(err))
+			}
+			cancel()
+		}
+	}
+
+	return nil
+}
+
+func (s *EventSubscriber) calculateTradesSettlement(trade *engine.Trade, takerOrder *domain.Order, makerOrder *domain.Order) ([]AccountUpdate, error) {
+	tradeValue := trade.Price.Mul(trade.Quantity)
+
+	var Buyer, Seller *domain.Order
+	if takerOrder.Side == domain.SideBuy {
+		Buyer = takerOrder
+		Seller = makerOrder
+	} else {
+		Buyer = makerOrder
+		Seller = takerOrder
+	}
+
+	base, quote, err := splitSymbol(takerOrder.Symbol)
+	if err != nil {
+		return nil, err
+	}
+
+	// taker.Price ≥ maker.Price 如果taker是买单的话冻结的比实际花的多
+	buyerUnlockAmount := tradeValue
+	if takerOrder.ID == Buyer.ID && !takerOrder.Price.IsZero() {
+		buyerUnlockAmount = takerOrder.Price.Mul(trade.Quantity)
+	}
+
+	buyerUnlockAmount = buyerUnlockAmount.Round(8)
+	tradeValue = tradeValue.Round(8)
+	tradeQty := trade.Quantity.Round(8)
+
+	updates := []AccountUpdate{
+		{UserID: Buyer.UserID, Currency: quote, Amount: tradeValue.Neg(), Unlock: buyerUnlockAmount},
+		{UserID: Buyer.UserID, Currency: base, Amount: tradeQty, Unlock: decimal.Zero},
+		{UserID: Seller.UserID, Currency: base, Amount: tradeQty.Neg(), Unlock: tradeQty},
+		{UserID: Seller.UserID, Currency: quote, Amount: tradeValue, Unlock: decimal.Zero},
+	}
+
+	return updates, nil
+
+}
+
 func (s *EventSubscriber) handleOrderCanceled(ctx context.Context, event *domain.OrderCanceledEvent) error {
 
 	var copyOrder *domain.Order
@@ -67,7 +268,7 @@ func (s *EventSubscriber) handleOrderCanceled(ctx context.Context, event *domain
 	err := s.txManager.ExecTx(ctx, func(ctx context.Context) error {
 		if event.FencingToken > 0 {
 
-		} // 撮合引擎相关
+		} // TODO撮合引擎相关
 
 		order, err := s.orderRepo.GetOrderForUpdate(ctx, event.OrderID)
 		if err != nil {
@@ -123,6 +324,42 @@ func (s *EventSubscriber) handleOrderCanceled(ctx context.Context, event *domain
 	return err
 }
 
+// 整理成account -> currency -> amount并排序
+func aggregateAndSortAccountUpdate(updates []AccountUpdate) []AccountUpdate {
+	aggMap := make(map[string]AccountUpdate)
+
+	for _, update := range updates {
+		key := update.UserID.String() + "_" + update.Currency
+
+		if up, ok := aggMap[key]; ok {
+			up.Amount = up.Amount.Add(update.Amount)
+			up.Unlock = up.Unlock.Add(update.Unlock)
+		} else {
+			copyUp := update
+			aggMap[key] = copyUp
+		}
+	}
+
+	var result []AccountUpdate
+
+	for _, res := range aggMap {
+		if !res.Amount.IsZero() || !res.Unlock.IsZero() {
+			result = append(result, res)
+		}
+	}
+
+	// 排序防死锁
+	sort.Slice(result, func(i, j int) bool {
+		// 先按userID排再按currency
+		if result[i].UserID.String() != result[j].UserID.String() {
+			return result[i].UserID.String() < result[j].UserID.String()
+		}
+		return result[i].Currency < result[j].Currency
+	})
+
+	return result
+}
+
 func calculateAmount(order *domain.Order, remain decimal.Decimal) (currency string, amount decimal.Decimal, err error) {
 	base, quote, err := splitSymbol(order.Symbol)
 	if err != nil {
@@ -132,4 +369,12 @@ func calculateAmount(order *domain.Order, remain decimal.Decimal) (currency stri
 		return quote, order.Price.Mul(remain), nil
 	}
 	return base, remain, nil
+}
+
+func cloneOrder(o *domain.Order) *domain.Order {
+	if o == nil {
+		return nil
+	}
+	copyOrder := *o
+	return &copyOrder
 }

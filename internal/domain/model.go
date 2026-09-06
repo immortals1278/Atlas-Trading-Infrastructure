@@ -32,6 +32,7 @@ type Order struct {
 	Side           OrderSide       `json:"side"` // 不用string确保类型安全
 	Status         OrderStatus     `json:"status"`
 	FilledQuantity decimal.Decimal `json:"filledQuantity"`
+	UpdatedAt      int64           `json:"updated_at"`
 }
 
 var (

@@ -116,7 +116,7 @@ func (s *Service) PlaceOrder(ctx context.Context, order *domain.Order) (err erro
 		}
 
 		if s.outboxRepo != nil && s.eventBus != nil {
-			event := &domain.OrderPlaceEvent{
+			event := &domain.OrderPlacedEvent{
 				EventType:      domain.EventOrderPlaced,
 				Symbol:         order.Symbol,
 				OrderID:        order.ID,
@@ -210,7 +210,7 @@ func (s *Service) BacthPlaceOrders(ctx context.Context, orders []*domain.Order) 
 		order.FilledQuantity = decimal.Zero
 
 		if s.outboxRepo != nil && s.eventBus != nil {
-			event := &domain.OrderPlaceEvent{
+			event := &domain.OrderPlacedEvent{
 				EventType:      domain.EventOrderPlaced,
 				Symbol:         order.Symbol,
 				OrderID:        order.ID,
