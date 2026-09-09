@@ -112,7 +112,10 @@ func (s *Subscriber) HandleOrderPlaced(ctx context.Context, event *domain.OrderP
 		}
 	}
 
-	// TODO更新redia，redis相关
+	// 更新redis缓存
+	snapShort := engine.GetOrderBookSnapshort(20)
+	s.OnOrderBookUpdate(event.Symbol, snapShort)
+
 	return nil
 }
 
@@ -154,4 +157,21 @@ func (s *Subscriber) HandleOrderCancelRequested(ctx context.Context, event *doma
 
 	// 更新redis
 	return nil
+}
+
+func (s *Subscriber) OnOrderBookUpdate(Symbol string, snapShort engine.OrderBookSnapshot) {
+	// 印上当前 Leader 的防脑裂令牌。
+	snapShort.FencingToken = s.fencingToken.Load()
+
+	// 更新redis缓存
+	if s.cacheRepo != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := s.cacheRepo.SetOrderBookSnapshot(ctx, &snapShort); err != nil {
+			logger.Warn("更新redis orderbook失败: err", zap.Error(err))
+		}
+	}
+
+	// 发送 Kafka 更新事件，供 WebSocket 进行推送。
+
 }

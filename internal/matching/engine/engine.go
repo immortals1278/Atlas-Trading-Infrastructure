@@ -158,3 +158,35 @@ func (e *Engine) Cancel(orderID uuid.UUID, side OrderSide) bool {
 
 	return e.orderbook.RemoveOrder(orderID, side)
 }
+
+func (e *Engine) GetOrderBookSnapshort(depth int) *OrderBookSnapshot {
+	snapShort := &OrderBookSnapshot{
+		Symbol: e.orderbook.Symbol,
+		Bids:   make([]OrderBookLevel, 0),
+		Asks:   make([]OrderBookLevel, 0),
+	}
+
+	// 处理买单
+	for i, order := range e.orderbook.bids {
+		if depth > 0 && i >= depth {
+			break
+		}
+		snapShort.Bids = append(snapShort.Bids, OrderBookLevel{
+			Price:    order.Price,
+			Quantity: order.Quantity,
+		})
+	}
+
+	//处理卖单
+	for i, order := range e.orderbook.asks {
+		if depth > 0 && i >= depth {
+			break
+		}
+		snapShort.Asks = append(snapShort.Asks, OrderBookLevel{
+			Price:    order.Price,
+			Quantity: order.Quantity,
+		})
+	}
+
+	return snapShort
+}

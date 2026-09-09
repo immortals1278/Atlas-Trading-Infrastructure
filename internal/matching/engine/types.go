@@ -40,7 +40,7 @@ type OrderBookSnapshot struct {
 	Symbol       string           `json:"symbol"`
 	Bids         []OrderBookLevel `json:"bids"`
 	Asks         []OrderBookLevel `json:"asks"`
-	FencingToken int64            `json:"fencing_token"` // 防脑裂令牌
+	FencingToken int64            `json:"fencing_token"`
 }
 
 func NewOrder(Id uuid.UUID, UserID uuid.UUID, Side OrderSide, Price decimal.Decimal, Quantity decimal.Decimal) *Order {
