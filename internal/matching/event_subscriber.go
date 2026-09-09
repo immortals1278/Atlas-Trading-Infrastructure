@@ -113,8 +113,8 @@ func (s *Subscriber) HandleOrderPlaced(ctx context.Context, event *domain.OrderP
 	}
 
 	// 更新redis缓存
-	snapShort := engine.GetOrderBookSnapshort(20)
-	s.OnOrderBookUpdate(event.Symbol, snapShort)
+	snapShot := engine.GetOrderBookSnapshort(20)
+	s.OnOrderBookUpdate(event.Symbol, snapShot)
 
 	return nil
 }
@@ -155,23 +155,39 @@ func (s *Subscriber) HandleOrderCancelRequested(ctx context.Context, event *doma
 		}
 	}
 
-	// 更新redis
+	// 更新redis 订单薄缓存
+	snapShot := engine.GetOrderBookSnapshort(20)
+	s.OnOrderBookUpdate(event.Symbol, snapShot)
 	return nil
 }
 
-func (s *Subscriber) OnOrderBookUpdate(Symbol string, snapShort engine.OrderBookSnapshot) {
+// 更新redis缓存
+func (s *Subscriber) OnOrderBookUpdate(Symbol string, snapShot *engine.OrderBookSnapshot) {
 	// 印上当前 Leader 的防脑裂令牌。
-	snapShort.FencingToken = s.fencingToken.Load()
+	snapShot.FencingToken = s.fencingToken.Load()
 
 	// 更新redis缓存
 	if s.cacheRepo != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		if err := s.cacheRepo.SetOrderBookSnapshot(ctx, &snapShort); err != nil {
+		if err := s.cacheRepo.SetOrderBookSnapshot(ctx, snapShot); err != nil {
 			logger.Warn("更新redis orderbook失败: err", zap.Error(err))
 		}
 	}
 
 	// 发送 Kafka 更新事件，供 WebSocket 进行推送。
+	if s.eventBus != nil {
+		event := &domain.OnOrderBookUpdatedEvent{
+			EventType: domain.EventOrderBookUpdated,
+			Symbol:    Symbol,
+			Snapshot:  snapShot,
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		if err := s.eventBus.Publish(ctx, domain.TopicOrderBook, Symbol, event); err != nil {
+			logger.Error("发布OnOrderBookUpdatedEvent失败", zap.Error(err))
+		}
+	}
 
 }

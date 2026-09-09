@@ -72,3 +72,9 @@ type SettlementRequestedEvent struct {
 	Trades         []*engine.Trade `json:"trades"`
 	FencingToken   int64           `json:"fencing_token"` // 判断是否来自合法的 Leader
 }
+
+type OnOrderBookUpdatedEvent struct {
+	EventType EventType                 `json:"event_type"`
+	Symbol    string                    `json:"symbol"`
+	Snapshot  *engine.OrderBookSnapshot `json:snapshot`
+}
