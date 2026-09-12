@@ -13,7 +13,7 @@ type Client struct {
 	Client *redis.Client
 }
 
-type config struct {
+type Config struct {
 	Addr         string // redis服务器地址
 	Password     string
 	DB           int           // 使用的数据库索引，redis有16个数据库
@@ -23,7 +23,19 @@ type config struct {
 	WriteTimeout time.Duration // 写入超时
 }
 
-func NewClient(cfg config) (*Client, error) {
+func DefaultConfig() Config {
+	return Config{
+		Addr:         "localhost:6379",
+		Password:     "",
+		DB:           0,
+		PoolSize:     100,
+		MinIdleConns: 20,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
+	}
+}
+
+func NewClient(cfg Config) (*Client, error) {
 	var opt *redis.Options
 	var err error
 
