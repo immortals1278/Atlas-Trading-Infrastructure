@@ -16,6 +16,8 @@ import (
 
 type Service struct {
 	orderRepo        OrderRepository
+	tradeRepo        TradeRepository
+	userRepo         UserRepository
 	accountRepo      AccountRepository
 	txManager        DBTransaction
 	eventBus         domain.EventPublisher
@@ -26,6 +28,8 @@ type Service struct {
 
 func NewService(
 	orderRepo OrderRepository,
+	tradeRepo TradeRepository,
+	userRepo UserRepository,
 	txManager DBTransaction,
 	accountRepo AccountRepository,
 	eventBus domain.EventPublisher,
@@ -34,6 +38,8 @@ func NewService(
 ) *Service {
 	s := &Service{
 		orderRepo:        orderRepo,
+		tradeRepo:        tradeRepo,
+		userRepo:         userRepo,
 		txManager:        txManager,
 		accountRepo:      accountRepo,
 		eventBus:         eventBus,

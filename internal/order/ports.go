@@ -23,8 +23,12 @@ type OrderRepository interface {
 
 type TradeRepository interface {
 	CreateTrade(ctx context.Context, trade *engine.Trade) error
-	TradeExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
 }
+
+type UserRepository interface {
+	CreateUser(ctx context.Context, user *domain.User) error
+	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
+} // TODOrepo没实现
 
 type AccountRepository interface {
 	UpdateBalance(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error
