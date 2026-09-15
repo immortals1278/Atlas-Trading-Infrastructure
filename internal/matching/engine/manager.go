@@ -7,7 +7,7 @@ type Manager struct {
 	mu      sync.RWMutex
 }
 
-func NewManager() *Manager {
+func NewEngineManager() *Manager {
 	return &Manager{
 		engines: make(map[string]*Engine),
 	}
