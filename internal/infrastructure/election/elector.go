@@ -15,7 +15,7 @@ type electorRepository interface {
 	ReleaseLock(ctx context.Context, partition, instanceID string) error
 }
 
-var _, electorRepository = (*Repository)(nil)
+var _ electorRepository = (*Repository)(nil)
 
 type Elector struct {
 	repo          electorRepository
@@ -32,7 +32,7 @@ func NewElector(repo *Repository, partition string, instanceID string) *Elector 
 		repo:          repo,
 		partition:     partition,
 		instanceID:    instanceID,
-		renewInterval: 10 * time.Second, // 每 5 秒尝试竞选或续租（租约 15 秒，有 3 个心跳周期的容错窗口）
+		renewInterval: 5 * time.Second, // 每 5 秒尝试竞选或续租（租约 15 秒，有 3 个心跳周期的容错窗口）
 	}
 }
 
@@ -88,7 +88,7 @@ func (e *Elector) tick(
 ) {
 	// leader尝试续租
 	if e.IsLeader() {
-		err := e.repo.ExtendLease()
+		err := e.repo.ExtendLease(ctx, e.partition, e.instanceID, e.GetFencingToken())
 		if err != nil {
 			// 续租失败
 			logger.Log.Warn("leader 续租失败", zap.Error(err))

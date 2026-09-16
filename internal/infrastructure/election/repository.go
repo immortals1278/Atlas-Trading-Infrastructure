@@ -15,7 +15,7 @@ type Repository struct {
 	pool *pgxpool.Pool
 }
 
-func NerRepository(pool *pgxpool.Pool) *Repository {
+func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
@@ -27,7 +27,14 @@ func (r *Repository) AcquireLock(ctx context.Context, partition, instanceID stri
 	now := time.Now().UnixMilli()
 	expiresAt := time.Now().Add(leaseDuration).UnixMilli()
 
-	row := r.pool.QueryRow(ctx, ``, partition, instanceID, expiresAt, now)
+	row := r.pool.QueryRow(ctx, `INSERT INTO partition_leader_locks (partition, leader_id, fencing_token, expires_at)
+		VALUES ($1, $2, 1, $3)
+		ON CONFLICT (partition) DO UPDATE
+		  SET leader_id     = EXCLUDED.leader_id,
+		      fencing_token = partition_leader_locks.fencing_token + 1,
+		      expires_at    = EXCLUDED.expires_at
+		  WHERE partition_leader_locks.expires_at < $4
+		RETURNING fencing_token`, partition, instanceID, expiresAt, now)
 
 	err = row.Scan(&fencingToken)
 	if err != nil {
@@ -40,4 +47,32 @@ func (r *Repository) AcquireLock(ctx context.Context, partition, instanceID stri
 	}
 
 	return fencingToken, true, nil
+}
+
+// 延长租约
+func (r *Repository) ExtendLease(ctx context.Context, partition, instanceID string, fencingToken int64) error {
+	expiresAt := time.Now().Add(leaseDuration)
+
+	cmdTag, err := r.pool.Exec(ctx, `
+		UPDATE partition_leader_lock
+		SET expires_at = $1
+		WHERE partition = $2 AND leader_id = $3 AND fencing_token = $4`,
+		expiresAt, partition, instanceID, fencingToken)
+
+	if err != nil {
+		return fmt.Errorf("延长租约失败")
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("租约已失效")
+	}
+	return nil
+}
+
+func (r *Repository) ReleaseLock(ctx context.Context, partition, instanceID string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE partition_leader_lock
+		SET EXPIRED_AT = 0
+		WHERE partition = $2 AND fencing_token = $3
+		`, partition, instanceID)
+	return err
 }

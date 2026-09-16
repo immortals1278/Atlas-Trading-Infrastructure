@@ -28,3 +28,10 @@ func (m *Manager) GetEngine(symbol string) *Engine {
 	return m.engines[symbol]
 
 }
+
+func (m *Manager) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.engines = make(map[string]*Engine)
+
+}
