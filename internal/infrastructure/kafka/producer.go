@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kmsg"
 	"go.uber.org/zap"
 )
 
@@ -63,6 +64,38 @@ func (p *Producer) Publish(ctx context.Context, topic, key string, payload inter
 		return fmt.Errorf("发送事件失败(: %s): %w", topic, err)
 	}
 
+	return nil
+
+}
+
+func (p *Producer) CreateTopics(ctx context.Context, topics []string) error {
+	req := &kmsg.CreateTopicsRequest{
+		TimeoutMillis: 10000,
+		Topics:        make([]kmsg.CreateTopicsRequestTopic, 0, len(topics)),
+	}
+	for _, topic := range topics {
+		req.Topics = append(req.Topics, kmsg.CreateTopicsRequestTopic{
+			Topic:             topic,
+			NumPartitions:     1,
+			ReplicationFactor: 1,
+		})
+	}
+
+	kresp, err := p.client.Request(ctx, req)
+	if err != nil {
+		return fmt.Errorf("CreateTopics 请求失败: %w", err)
+	}
+
+	resp := kresp.(*kmsg.CreateTopicsResponse)
+	for _, t := range resp.Topics {
+		// ErrorCode 36 = TOPIC_ALREADY_EXISTS，已存在
+		if t.ErrorCode != 0 && t.ErrorCode != 36 {
+			logger.Log.Warn("建立 Kafka topic 失败",
+				zap.String("topic", t.Topic),
+				zap.Int16("errorCode", t.ErrorCode),
+			)
+		}
+	}
 	return nil
 
 }

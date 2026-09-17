@@ -34,7 +34,7 @@ func (s *Subscriber) SetFencingToken(token int64) {
 	s.fencingToken.Store(token)
 }
 
-func (s *Subscriber) HandleEvent(ctx context.Context, key, value []byte) error {
+func (s *Subscriber) HandleEvents(ctx context.Context, key, value []byte) error {
 	if s.fencingToken.Load() == 0 {
 		logger.Warn("fencingToken不合法", zap.String("reason", "fencing_token is 0"))
 		return nil

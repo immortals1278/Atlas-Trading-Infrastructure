@@ -142,7 +142,6 @@ func main() {
 		}
 
 		// 建立consumer 单独的context 让onLoseLeader可以单独取消
-		// TODO 没实现
 		consumerCtx, cancel := context.WithCancel(context.Background())
 		consumerCancel = cancel
 
@@ -154,7 +153,7 @@ func main() {
 		}
 
 		matchConsumer = consumer
-		macthConsumer.Start(consumerCtx, svc.HandleEvents)
+		matchConsumer.Start(consumerCtx, svc.HandleEvents)
 		logger.Log.Info("Kafka matching consumer 已啟動", zap.String("topic", domain.TopicOrders))
 	}
 
@@ -225,7 +224,7 @@ func main() {
 	}
 	consumerMu.Unlock()
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background())
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Log.Error("health check关闭失败", zap.Error(err))
