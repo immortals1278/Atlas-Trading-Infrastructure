@@ -23,6 +23,7 @@ type OrderRepository interface {
 
 type TradeRepository interface {
 	CreateTrade(ctx context.Context, trade *engine.Trade) error
+	TradeExistsByID(ctx context.Context, id uuid.UUID) (bool, error) // 幂等性检查
 }
 
 type UserRepository interface {

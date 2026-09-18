@@ -50,7 +50,6 @@ func NewService(
 	return s
 }
 
-// 在哪启动？
 func (s *Service) batchMarkPublishedWorker() {
 	ticker := time.NewTicker(50 * time.Millisecond) // 每50ms发一个信号
 	defer ticker.Stop()

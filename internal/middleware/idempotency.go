@@ -72,7 +72,7 @@ func (s *memoryIdempotencyStore) cleanupLoop() {
 }
 
 // IdempotencyMiddleware 构建幂等性 Gin 中间件
-// 客户端必须在 Header 带 Idempotency-Key，若同一个 Key 已被处理，直接返回缓存结果。
+// 客户端必须在 Header 带 Idempotency-Key
 func IdempotencyMiddleware(store IdempotencyStore, ttl time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := c.GetHeader("Idempotency-Key")
@@ -84,7 +84,7 @@ func IdempotencyMiddleware(store IdempotencyStore, ttl time.Duration) gin.Handle
 
 		// 缓存命中：直接用 c.Data 返回存储好的原始 JSON bytes，不触发任何业务逻辑
 		if entry := store.Get(key); entry != nil {
-			c.Data(entry.StatusCode, "application/json", entry.Body)
+			c.Data(entry.StatusCode, "application/json", entry.Body) // 若同一个 Key 已被处理，直接返回缓存结果。
 			c.Abort()
 			return
 		}
@@ -94,7 +94,7 @@ func IdempotencyMiddleware(store IdempotencyStore, ttl time.Duration) gin.Handle
 		c.Writer = blw
 		c.Next()
 
-		// Handler 完成后，若状态 < 400 才缓存（错误响应不应被重用）
+		// Handler 完成后，若状态 < 400 写入缓存（错误响应不应被重用）
 		if blw.statusCode < 400 && len(blw.body) > 0 {
 			store.Set(key, blw.statusCode, blw.body, ttl)
 		}

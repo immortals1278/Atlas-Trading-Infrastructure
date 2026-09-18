@@ -6,14 +6,18 @@ import (
 	"atlas-trading-infrastructure/internal/matching/engine"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 )
+
+var ErrIdempotencySkip = errors.New("idempotency skip")
 
 type AccountUpdate struct {
 	UserID   uuid.UUID
@@ -76,6 +80,37 @@ func (s *EventSubscriber) HandleEvents(ctx context.Context, key, value []byte) (
 }
 
 func (s *EventSubscriber) handleSettlementRequestedEvent(ctx context.Context, event *domain.SettlementRequestedEvent) error {
+	// 幂等性保护
+	if len(event.Trades) > 0 {
+		exists, err := s.tradeRepo.TradeExistsByID(ctx, event.Trades[0].ID)
+		if err != nil {
+			return fmt.Errorf("幂等检查失败: %w", err)
+		}
+		if exists {
+			logger.Info("结算事件已处理",
+				zap.String("trade_id", event.Trades[0].ID.String()),
+			)
+			return nil
+		}
+	} else {
+		takerOrder, err := s.orderRepo.GetOrder(ctx, event.TakerOrderID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				logger.Warn("对应订单不存在 跳过",
+					zap.String("taker_order_id", event.TakerOrderID.String()),
+				)
+				return nil
+			}
+			return fmt.Errorf("查询 taker 订单失败: %w", err)
+		}
+		if takerOrder.Status != domain.StatusNew {
+			logger.Info("无成交结算事件已处理 跳过",
+				zap.String("order_id", event.TakerOrderID.String()),
+				zap.String("status", domain.StatusToString(takerOrder.Status)),
+			)
+			return nil
+		}
+	}
 
 	err := s.executeSettlementTx(ctx, event)
 	return err
@@ -118,6 +153,21 @@ func (s *EventSubscriber) executeSettlementTx(ctx context.Context, event *domain
 		}
 
 		takerOrder := lockedOrders[event.TakerOrderID]
+
+		// tx内再查一次
+		if takerOrder.Status != domain.StatusNew {
+			return ErrIdempotencySkip
+		}
+
+		if len(event.Trades) > 0 {
+			exists, err := s.tradeRepo.TradeExistsByID(ctx, event.Trades[0].ID)
+			if err != nil {
+				return fmt.Errorf("TX 內部冪等檢查失敗: %w", err)
+			}
+			if exists {
+				return ErrIdempotencySkip
+			}
+		}
 
 		allAccountUpdates := make([]AccountUpdate, 0)
 

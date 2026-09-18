@@ -3,6 +3,8 @@ package repository
 import (
 	"atlas-trading-infrastructure/internal/matching/engine"
 	"context"
+
+	"github.com/google/uuid"
 )
 
 func (r *PostgresRepository) CreateTrade(ctx context.Context, trade *engine.Trade) error {
@@ -14,4 +16,12 @@ func (r *PostgresRepository) CreateTrade(ctx context.Context, trade *engine.Trad
 	_, err := executor.Exec(ctx, query, trade.ID, trade.Symbol, trade.MakerOrderID, trade.TakerOrderID,
 		trade.Price, trade.Quantity, trade.CreatedAt)
 	return err
+}
+
+func (r *PostgresRepository) TradeExistsByID(ctx context.Context, id uuid.UUID) (bool, error) {
+	executor := r.GetExecutor(ctx)
+	var exists bool
+	query := `SELECT EXISTS(SELECT 1 FROM trades WHERE id = $1)`
+	err := executor.QueryRow(ctx, query, id).Scan(&exists)
+	return exists, err
 }

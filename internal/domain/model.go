@@ -21,6 +21,7 @@ const (
 	StatusPartiallyFilled OrderStatus = 2 // 部分成交
 	StatusFilled          OrderStatus = 3 // 完全成交
 	StatusCanceled        OrderStatus = 4 // 已取消
+	StatusRejected        OrderStatus = 5 // 已拒绝
 )
 
 type Order struct {
@@ -47,4 +48,21 @@ var allowedSymbol = map[string]bool{
 
 func IsSymbolAllowed(symbol string) bool {
 	return allowedSymbol[symbol]
+}
+
+func StatusToString(s OrderStatus) string {
+	switch s {
+	case StatusNew:
+		return "NEW"
+	case StatusPartiallyFilled:
+		return "PARTIALLY_FILLED"
+	case StatusFilled:
+		return "FILLED"
+	case StatusCanceled:
+		return "CANCELED"
+	case StatusRejected:
+		return "REJECTED"
+	default:
+		return "UNKNOWN"
+	}
 }
