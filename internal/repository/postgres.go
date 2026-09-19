@@ -45,3 +45,27 @@ func (r *PostgresRepository) GetExecutor(ctx context.Context) DBExecutor {
 	}
 	return r.db
 }
+
+func (r *PostgresRepository) ValidateFencingTokenTx(ctx context.Context, partition string, token int64) (bool, error) {
+	var currentToken int64
+
+	err := r.GetExecutor(ctx).QueryRow(ctx, `
+		SELECT fencing_token
+		FROM partition_leader_locks
+		WHERE partition = $1
+		FOR SHARE`,
+		partition,
+	).Scan(&currentToken)
+
+	if err != nil {
+		// pgx.ErrNoRows 表示db中没有leader持有锁
+		// → 系统刚启动允许通过
+		return true, nil
+	}
+
+	// 检查是否为最新的fencingToken
+	if token < currentToken {
+		return false, nil
+	}
+	return true, nil
+}

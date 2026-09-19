@@ -121,8 +121,16 @@ func (s *EventSubscriber) executeSettlementTx(ctx context.Context, event *domain
 	var updateOrders []*domain.Order
 
 	err := s.txManager.ExecTx(ctx, func(ctx context.Context) error {
-		if event.FencingToken > 0 {
-			//TODO leader相关
+		// 二次检验fencingToken是否合法
+		valid, err := s.txManager.ValidateFencingTokenTx(ctx, "matching-engine:global", event.FencingToken)
+		if err != nil {
+			return fmt.Errorf("TX 内部检验fencingToken失败: %w", err)
+		}
+		if !valid {
+			logger.Warn("fencingToken不符合",
+				zap.Int64("event_fencing_token", event.FencingToken),
+			)
+			return ErrStaleSettlementEvent
 		}
 
 		makerOrderIDsMap := make(map[uuid.UUID]bool)
@@ -328,9 +336,18 @@ func (s *EventSubscriber) handleOrderCanceled(ctx context.Context, event *domain
 	var orderSymbol string // 用来发updated event
 
 	err := s.txManager.ExecTx(ctx, func(ctx context.Context) error {
-		if event.FencingToken > 0 {
-
-		} // TODO撮合引擎相关
+		// 二次检验fencingToken是否合法
+		valid, err := s.txManager.ValidateFencingTokenTx(ctx, "matching-engine:global", event.FencingToken)
+		if err != nil {
+			return fmt.Errorf("TX 内部检验fencingToken失败: %w", err)
+		}
+		if !valid {
+			logger.Warn("fencingToken不符合",
+				zap.Int64("event_fencing_token", event.FencingToken),
+			)
+			// 避免consumer 无限循环
+			return ErrStaleSettlementEvent
+		}
 
 		order, err := s.orderRepo.GetOrderForUpdate(ctx, event.OrderID)
 		if err != nil {

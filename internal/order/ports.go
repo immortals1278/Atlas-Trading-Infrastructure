@@ -11,6 +11,7 @@ import (
 
 type DBTransaction interface {
 	ExecTx(ctx context.Context, fn func(ctx context.Context) error) error
+	ValidateFencingTokenTx(ctx context.Context, partition string, token int64) (valid bool, err error)
 }
 
 type OrderRepository interface {
