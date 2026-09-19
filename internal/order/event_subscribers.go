@@ -18,6 +18,7 @@ import (
 )
 
 var ErrIdempotencySkip = errors.New("idempotency skip")
+var ErrStaleSettlementEvent = errors.New("stale settlement event")
 
 type AccountUpdate struct {
 	UserID   uuid.UUID
@@ -147,6 +148,14 @@ func (s *EventSubscriber) executeSettlementTx(ctx context.Context, event *domain
 		for _, id := range allOrderIDs {
 			lockedOrder, err := s.orderRepo.GetOrderForUpdate(ctx, id)
 			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					logger.Warn("收到过期的结算事件 跳过避免无线重试",
+						zap.String("taker_order_id", event.TakerOrderID.String()),
+						zap.String("missing_order_id", id.String()),
+						zap.Int("trade_count", len(event.Trades)),
+					)
+					return ErrStaleSettlementEvent
+				}
 				return fmt.Errorf("锁定订单失败,订单: %s : %w", id, err)
 			}
 			lockedOrders[id] = lockedOrder
@@ -162,7 +171,7 @@ func (s *EventSubscriber) executeSettlementTx(ctx context.Context, event *domain
 		if len(event.Trades) > 0 {
 			exists, err := s.tradeRepo.TradeExistsByID(ctx, event.Trades[0].ID)
 			if err != nil {
-				return fmt.Errorf("TX 內部冪等檢查失敗: %w", err)
+				return fmt.Errorf("tx内部幂等性检查失败: %w", err)
 			}
 			if exists {
 				return ErrIdempotencySkip
@@ -250,6 +259,9 @@ func (s *EventSubscriber) executeSettlementTx(ctx context.Context, event *domain
 	})
 
 	if err != nil {
+		if errors.Is(err, ErrIdempotencySkip) || errors.Is(err, ErrStaleSettlementEvent) {
+			return nil
+		}
 		return err
 	}
 
@@ -322,6 +334,12 @@ func (s *EventSubscriber) handleOrderCanceled(ctx context.Context, event *domain
 
 		order, err := s.orderRepo.GetOrderForUpdate(ctx, event.OrderID)
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				logger.Warn("收到过期撤单结算事件 订单不存在 跳过",
+					zap.String("order_id", event.OrderID.String()),
+				)
+				return ErrStaleSettlementEvent
+			}
 			return fmt.Errorf("锁定订单失败: %w", err)
 		}
 
@@ -355,7 +373,10 @@ func (s *EventSubscriber) handleOrderCanceled(ctx context.Context, event *domain
 
 		return nil
 	})
-	// 过时错误不处理逻辑没写 撮合引擎相关
+
+	if errors.Is(err, ErrStaleSettlementEvent) {
+		return nil
+	}
 	// 取消成功发kafka
 	if err == nil && copyOrder != nil && s.eventBus != nil {
 		updateEvent := &domain.OrderUpdatedEvent{
