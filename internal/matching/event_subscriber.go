@@ -191,3 +191,13 @@ func (s *Subscriber) OnOrderBookUpdate(Symbol string, snapShot *engine.OrderBook
 	}
 
 }
+
+func (s *Subscriber) SyncRecoveredOrderBooks(depth int) []string {
+	symbols := s.manager.GetSymbols()
+	for _, symbol := range symbols {
+		eng := s.manager.GetEngine(symbol)
+		snapshot := eng.GetOrderBookSnapshort(depth)
+		s.OnOrderBookUpdate(symbol, snapshot)
+	}
+	return symbols
+}

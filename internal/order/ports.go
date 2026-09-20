@@ -20,6 +20,7 @@ type OrderRepository interface {
 	GetOrder(ctx context.Context, id uuid.UUID) (*domain.Order, error)
 	UpdateOrder(ctx context.Context, order *domain.Order) error
 	GetOrderForUpdate(ctx context.Context, id uuid.UUID) (*domain.Order, error)
+	GetActiveOrders(ctx context.Context) ([]*domain.Order, error) // 取得所有尚未完成成交的订单
 }
 
 type TradeRepository interface {

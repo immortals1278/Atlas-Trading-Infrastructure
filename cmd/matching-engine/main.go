@@ -107,14 +107,18 @@ func main() {
 
 		logger.Log.Info("已成为leader 开始冷启动", zap.String("instanceID", instanceID))
 
-		// 防止上一任leader 数据污染
+		// 清空数据，防止上一任leader 数据污染
 		engineManager.Reset()
 
 		// 设置fencing token
 		svc.SetFencingToken(elector.GetFencingToken())
 
 		// 还原撮合引擎快照
-		matching.RestoreEngineSnapshot(context.Background(), repo, engineManager) // TODO没实现
+		logger.Log.Info("正在从db还原撮合引擎快照")
+		if err := matching.RestoreEngineSnapshot(context.Background(), repo, engineManager); err != nil {
+			logger.Log.Error("还原撮合引擎快照失败", zap.Error(err))
+		}
+		logger.Log.Info("撮合引擎快照还原完成")
 
 		// 建立kafka topic （没实现）TODO
 		topicCtx, topicCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -131,7 +135,7 @@ func main() {
 			logger.Log.Info("Kafka topics 已初始化")
 		}
 
-		// 同步订单薄至redis TODO没实现
+		// 同步订单薄至redis
 		restoredSymbols := svc.SyncRecoveredOrderBooks(20)
 		if len(restoredSymbols) == 0 {
 			logger.Log.Info("冷启动后没有需要同步的快照")

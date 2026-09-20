@@ -97,3 +97,32 @@ func scanOrder(row rowScanner) (*domain.Order, error) {
 	}
 	return &o, nil
 }
+
+func (r *PostgresRepository) GetActiveOrders(ctx context.Context) ([]*domain.Order, error) {
+	executor := r.GetExecutor(ctx)
+	// Status 1=NEW, 2=PARTIALLY_FILLED
+	query := `
+		SELECT id, user_id, symbol, side, type, price, quantity, filled_quantity, status, created_at, updated_at
+		FROM orders 
+		WHERE status IN (1, 2) 
+		ORDER BY created_at ASC`
+
+	rows, err := executor.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []*domain.Order
+	for rows.Next() {
+		o, err := scanOrder(rows)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return orders, nil
+}

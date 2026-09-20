@@ -35,3 +35,14 @@ func (m *Manager) Reset() {
 	m.engines = make(map[string]*Engine)
 
 }
+
+func (m *Manager) GetSymbols() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	symbols := []string{}
+	for key := range m.engines {
+		symbols = append(symbols, key)
+	}
+	return symbols
+}

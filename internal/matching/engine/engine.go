@@ -190,3 +190,9 @@ func (e *Engine) GetOrderBookSnapshort(depth int) *OrderBookSnapshot {
 
 	return snapShort
 }
+
+func (e *Engine) RestoreOrder(order *Order) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.orderbook.AddOrder(order)
+}
