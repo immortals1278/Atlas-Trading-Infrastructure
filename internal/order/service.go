@@ -178,7 +178,7 @@ func (s *Service) PlaceOrder(ctx context.Context, order *domain.Order) (err erro
 	return nil
 }
 
-func (s *Service) BacthPlaceOrders(ctx context.Context, orders []*domain.Order) error {
+func (s *Service) BatchPlaceOrders(ctx context.Context, orders []*domain.Order) error {
 	if len(orders) == 0 {
 		return nil
 	}
@@ -381,4 +381,12 @@ func (S *Service) calculateLockAmount(order *domain.Order) (currency string, amo
 	}
 	return base, order.Quantity, nil
 
+}
+
+func (s *Service) GetOrder(ctx context.Context, id uuid.UUID) (*domain.Order, error) {
+	return s.orderRepo.GetOrder(ctx, id)
+}
+
+func (s *Service) GetBalances(ctx context.Context, userID uuid.UUID) ([]*domain.Account, error) {
+	return s.accountRepo.GetAccountsByUser(ctx, userID)
 }

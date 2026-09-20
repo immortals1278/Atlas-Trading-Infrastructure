@@ -38,6 +38,7 @@ type AccountRepository interface {
 	LockFunds(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error
 	BatchLockFunds(ctx context.Context, lockFunds map[uuid.UUID]map[string]decimal.Decimal) error
 	UnlockFunds(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error
+	GetAccountsByUser(ctx context.Context, userID uuid.UUID) ([]*domain.Account, error)
 }
 
 type OrderService interface {

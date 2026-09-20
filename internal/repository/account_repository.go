@@ -105,3 +105,27 @@ func (r *PostgresRepository) UnlockFunds(ctx context.Context, userID uuid.UUID, 
 
 	return nil
 }
+
+func (r *PostgresRepository) GetAccountsByUser(ctx context.Context, userID uuid.UUID) ([]*domain.Account, error) {
+	executor := r.GetExecutor(ctx)
+	query := `SELECT id, user_id, currency, balance, locked, created_at, updated_at FROM accounts WHERE user_id = $1`
+
+	rows, err := executor.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var accounts []*domain.Account
+	for rows.Next() {
+		var acc domain.Account
+		if err := rows.Scan(&acc.ID, &acc.UserID, &acc.Currency, &acc.Balance, &acc.Locked, &acc.CreatedAt, &acc.UpdatedAt); err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, &acc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return accounts, nil
+}

@@ -36,6 +36,16 @@ type Order struct {
 	UpdatedAt      int64           `json:"updated_at"`
 }
 
+type Account struct {
+	ID        uuid.UUID       `json:"id"`
+	UserID    uuid.UUID       `json:"user_id"`
+	Currency  string          `json:"currency"`   // 币种 例如 "USD", "BTC"
+	Balance   decimal.Decimal `json:"balance"`    // 余额
+	Locked    decimal.Decimal `json:"locked"`     // 锁定余额
+	CreatedAt int64           `json:"created_at"` // Unix 毫秒
+	UpdatedAt int64           `json:"updated_at"` // Unix 毫秒
+}
+
 var (
 	ErrInsufficientFunds = fmt.Errorf("insufficient funds")
 	ErrIdempotencySkip   = fmt.Errorf("idempotency skip: event already processed")
@@ -62,6 +72,29 @@ func StatusToString(s OrderStatus) string {
 		return "CANCELED"
 	case StatusRejected:
 		return "REJECTED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// SideFromString 字符串转 OrderSide (API 输入层使用)
+func SideFromString(s string) (OrderSide, error) {
+	switch s {
+	case "BUY":
+		return SideBuy, nil
+	case "SELL":
+		return SideSell, nil
+	default:
+		return 0, fmt.Errorf("无效订单方向: %s", s)
+	}
+}
+
+func SideToString(s OrderSide) string {
+	switch s {
+	case SideBuy:
+		return "BUY"
+	case SideSell:
+		return "SELL"
 	default:
 		return "UNKNOWN"
 	}
