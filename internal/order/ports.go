@@ -31,7 +31,7 @@ type TradeRepository interface {
 type UserRepository interface {
 	CreateUser(ctx context.Context, user *domain.User) error
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
-} // TODOrepo没实现
+}
 
 type AccountRepository interface {
 	UpdateBalance(ctx context.Context, userID uuid.UUID, currency string, amount decimal.Decimal) error
@@ -42,7 +42,9 @@ type AccountRepository interface {
 }
 
 type OrderService interface {
+	GetOrder(ctx context.Context, id uuid.UUID) (*domain.Order, error)
 	PlaceOrder(ctx context.Context, order *domain.Order) error
 	BatchPlaceOrders(ctx context.Context, orders []*domain.Order) error
 	CancelOrder(ctx context.Context, orderID, userID uuid.UUID) error
+	GetBalances(ctx context.Context, userID uuid.UUID) ([]*domain.Account, error)
 }

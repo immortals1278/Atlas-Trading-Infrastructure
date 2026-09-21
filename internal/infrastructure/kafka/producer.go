@@ -68,6 +68,30 @@ func (p *Producer) Publish(ctx context.Context, topic, key string, payload inter
 
 }
 
+// PublishRaw 将已序列化的 []byte 直接发布至指定topic
+// outbox使用
+func (p *Producer) PublishRaw(ctx context.Context, topic, key string, value []byte) error {
+	pubCtx, cancel := context.WithTimeout(ctx, p.publishTimeout)
+	defer cancel()
+
+	record := &kgo.Record{
+		Topic: topic,
+		Key:   []byte(key),
+		Value: value,
+	}
+
+	if err := p.client.ProduceSync(pubCtx, record).FirstErr(); err != nil {
+		logger.Error("Outbox: 发布原始事件到kaka失败",
+			zap.String("topic", topic),
+			zap.String("key", key),
+			zap.Error(err),
+		)
+		return fmt.Errorf("Outbox PublishRaw 失败: %w", err)
+	}
+
+	return nil
+}
+
 func (p *Producer) CreateTopics(ctx context.Context, topics []string) error {
 	req := &kmsg.CreateTopicsRequest{
 		TimeoutMillis: 10000,

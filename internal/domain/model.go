@@ -46,6 +46,14 @@ type Account struct {
 	UpdatedAt int64           `json:"updated_at"` // Unix 毫秒
 }
 
+type User struct {
+	ID           uuid.UUID `json:"id"`
+	Email        string    `json:"email"`
+	PasswordHash string    `json:"-"`
+	CreatedAt    int64     `json:"created_at"`
+	UpdatedAt    int64     `json:"updated_at"`
+}
+
 var (
 	ErrInsufficientFunds = fmt.Errorf("insufficient funds")
 	ErrIdempotencySkip   = fmt.Errorf("idempotency skip: event already processed")

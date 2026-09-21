@@ -68,7 +68,7 @@ func main() {
 	go worker.Start(outboxCtx)
 
 	svc := order.NewService(
-		repo, repo, repo, repo, repo, // TODO UserRepo没写
+		repo, repo, repo, repo, repo,
 		eventBus,
 		kafkaProducer,
 		outboxRepo,
@@ -89,9 +89,9 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	handler := api.NewHandler(svc) // TODO没有实现完接口里的所有方法
+	handler := api.NewHandler(svc)
 	v1 := r.Group("/api/v1")
-	handler.RegisterRoutes(v1) // TODO没实现
+	handler.RegisterRoutes(v1)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "order-service"})
