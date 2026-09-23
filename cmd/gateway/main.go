@@ -45,7 +45,6 @@ func main() {
 
 	privateRateLimit := 100
 
-	// TODO配置redis相关中间件
 	var privateLimiter middleware.RateLimiter
 	var idempStore middleware.IdempotencyStore
 

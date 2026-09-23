@@ -54,7 +54,7 @@ func main() {
 		kafkaCfg.AllowAutoTopicCreation = false
 	}
 
-	kafkaProducer, err := kafka.NewProducer(kafkaCfg) // TODO没实现publishRaw
+	kafkaProducer, err := kafka.NewProducer(kafkaCfg)
 	if err != nil {
 		logger.Log.Error("kafka启动失败 微服务模式无法启动", zap.Error(err))
 	}

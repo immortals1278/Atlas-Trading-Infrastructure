@@ -51,7 +51,7 @@ func NewService(
 }
 
 func (s *Service) batchMarkPublishedWorker() {
-	ticker := time.NewTicker(50 * time.Millisecond) // 每50ms发一个信号
+	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
 	var batch []uuid.UUID
@@ -62,7 +62,7 @@ func (s *Service) batchMarkPublishedWorker() {
 			if len(batch) >= 200 { //消息数量足够多也触发
 				s.flushBatch(&batch)
 			}
-		case <-ticker.C:
+		case <-ticker.C: //每50ms清理一次
 			s.flushBatch(&batch)
 		}
 	}
@@ -108,16 +108,16 @@ func (s *Service) PlaceOrder(ctx context.Context, order *domain.Order) (err erro
 	// 将place order和给outbox发消息的操作一起原子性执行
 	var outboxMsg *outbox.Message
 	err = s.txManager.ExecTx(ctx, func(ctx context.Context) error {
+		if !domain.IsSymbolAllowed(order.Symbol) {
+			return fmt.Errorf("不允许的交易对：%w", err)
+		}
+
 		if err := s.accountRepo.LockFunds(ctx, order.UserID, currencyToLock, amountToLock); err != nil {
 			return fmt.Errorf("冻结失败：%w", err)
 		}
 
 		if err := s.orderRepo.CreateOrder(ctx, order); err != nil {
 			return fmt.Errorf("创建订单失败: %w", err)
-		}
-
-		if !domain.IsSymbolAllowed(order.Symbol) {
-			return fmt.Errorf("不允许的交易对：%w", err)
 		}
 
 		if s.outboxRepo != nil && s.eventBus != nil {
