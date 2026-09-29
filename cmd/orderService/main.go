@@ -32,8 +32,8 @@ func main() {
 		logger.Log.Fatal("DATABASE_URL未设置环境变量")
 	}
 	dbCfg := db.DefaultDBConfig(dbURL)
-	dbCfg.MaxOpenConns = 150 // order-service 分配前台流量，分配更多连接
-	dbCfg.MaxIdleTime = 5 * time.Minute
+	dbCfg.MaxOpenConns = 150            // order-service 分配前台流量，分配更多连接
+	dbCfg.MaxIdleTime = 5 * time.Minute // 连接在池中空闲超过五分钟被关闭
 	pool, err := db.NewPostgresPool(context.Background(), dbCfg)
 	if err != nil {
 		logger.Log.Fatal("连接数据库失败", zap.Error(err))

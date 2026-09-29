@@ -91,7 +91,7 @@ func scanOrder(row rowScanner) (*domain.Order, error) {
 	var o domain.Order
 	err := row.Scan(
 		&o.ID, &o.Symbol, &o.Side,
-		&o.Price, &o.Quantity, &o.FilledQuantity, &o.Status) // 谁实现接口，谁就能用
+		&o.Price, &o.Quantity, &o.FilledQuantity, &o.Status)
 	if err != nil {
 		return nil, err
 	}

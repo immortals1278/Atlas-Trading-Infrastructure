@@ -28,7 +28,10 @@ func main() {
 
 	port := "8100"
 
-	orderServiceURL := "http://localhost:8103"
+	orderServiceURL := os.Getenv("ORDER_SERVICE_PORT")
+	if orderServiceURL == "" {
+		orderServiceURL = "http://localhost:8103"
+	}
 
 	// 将orderServiceURL 字符串为 *url.URL
 	orderURL, err := url.Parse(orderServiceURL)
@@ -56,7 +59,7 @@ func main() {
 		idempStore = middleware.NewMemoryIdempotencyStore()
 	}
 
-	// 设置反向代理
+	// 包装成gin处理函数（设置反向代理）
 	orderProxy := newReverseProxy(orderURL)
 
 	// 设置gin
@@ -67,7 +70,7 @@ func main() {
 		AllowOrigins:     []string{"http://localhost:5173"},
 		AllowMethods:     []string{"GET", "POST", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Idempotency-Key", "X-User-ID"},
-		AllowCredentials: true, // // 允许携带 Cookie/Authorization 等凭证
+		AllowCredentials: true, // 允许携带 Cookie/Authorization 等凭证
 		MaxAge:           12 * time.Hour,
 	}))
 	// 注册要转发的路由
@@ -81,7 +84,6 @@ func main() {
 	{
 		private := apiGroup.Group("/")
 		private.Use(middleware.RateLimitMiddleware(privateLimiter))
-		private.GET("/orders", gin.WrapH(orderProxy))
 		private.GET("/orders/:id", gin.WrapH(orderProxy))
 		private.DELETE("/orders/:id", gin.WrapH(orderProxy))
 		private.GET("/accounts", gin.WrapH(orderProxy))

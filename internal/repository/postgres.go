@@ -25,7 +25,7 @@ var _ order.DBTransaction = (*PostgresRepository)(nil)
 // 通过BeginFunc来实现成功提交失败回滚
 func (r *PostgresRepository) ExecTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	return pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
-		txCtx := context.WithValue(ctx, db.TxKey, tx) //将事务对象存进context
+		txCtx := context.WithValue(ctx, db.TxKey, tx) //将tx存进context
 		return fn(txCtx)
 
 	})
@@ -38,9 +38,9 @@ type DBExecutor interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// 有些操作需要在事务内执行，有些不用(用pool)
+// 有些操作需要在事务内执行，有些不用(单步操作直接执行)
 func (r *PostgresRepository) GetExecutor(ctx context.Context) DBExecutor {
-	if tx := db.GetTx(ctx); ctx != nil {
+	if tx := db.GetTx(ctx); tx != nil {
 		return tx
 	}
 	return r.db

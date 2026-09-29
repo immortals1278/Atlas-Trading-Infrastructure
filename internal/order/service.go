@@ -371,6 +371,7 @@ func splitSymbol(symbol string) (base string, quote string, err error) {
 	return parts[0], parts[1], err
 }
 
+// 买方锁quote卖方锁base
 func (S *Service) calculateLockAmount(order *domain.Order) (currency string, amount decimal.Decimal, err error) {
 	base, quote, err := splitSymbol(order.Symbol)
 	if err != nil {
