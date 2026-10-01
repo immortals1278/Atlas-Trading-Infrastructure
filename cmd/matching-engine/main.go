@@ -91,7 +91,7 @@ func main() {
 		logger.Log.Fatal("获取实例ID失败", zap.Error(err))
 	}
 	electionRepo := election.NewRepository(pool)
-	elector := election.NewElector(electionRepo, "matching-engine: global", instanceID) // 所有交易对在一个进程里撮合
+	elector := election.NewElector(electionRepo, "matching-engine: global", instanceID)
 
 	// consumer 生命周期管理
 	var (
@@ -197,7 +197,7 @@ func main() {
 			"is_leader":  elector.IsLeader(),
 			"instanceID": instanceID,
 		})
-	})
+	}) // 靠这个url判断进程是否还活着
 
 	port := os.Getenv("MATCHING_ENGINE_PORT")
 	if port == "" {

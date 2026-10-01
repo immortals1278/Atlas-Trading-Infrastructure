@@ -72,7 +72,7 @@ func (r *Repository) ReleaseLock(ctx context.Context, partition, instanceID stri
 	_, err := r.pool.Exec(ctx, `
 		UPDATE partition_leader_lock
 		SET EXPIRED_AT = 0
-		WHERE partition = $2 AND fencing_token = $3
+		WHERE partition = $1 AND leader_id = $2
 		`, partition, instanceID)
 	return err
 }
