@@ -62,10 +62,10 @@ func main() {
 	// kafka producer
 	kafkaCfg := kafka.DefaultConfig()
 	if brokers := os.Getenv("KAFKA_BROKERS"); brokers != "" {
-		kafkaCfg.Brokers = strings.Split(brokers, ",")
+		kafkaCfg.Brokers = strings.Split(brokers, ",") // broker地址列表
 	}
 	if resetOffset := os.Getenv("KAFKA_RESET_OFFSET"); resetOffset != "" {
-		kafkaCfg.ResetOffset = strings.ToLower(resetOffset)
+		kafkaCfg.ResetOffset = strings.ToLower(resetOffset) // 没有初始offset时从哪开始读
 	}
 	if os.Getenv("KAFKA_ALLOW_AUTO_CREATE") == "false" {
 		kafkaCfg.AllowAutoTopicCreation = false
@@ -86,9 +86,9 @@ func main() {
 
 	// leader election设置 （election设置完后才启动consumer）
 	// instance id使用通host name
-	instanceID, err := os.Hostname()
-	if err != nil {
-		logger.Log.Fatal("无法取得hostname作为实例ID", zap.Error(err))
+	instanceID := os.Getenv("INSTANCE_ID")
+	if instanceID == "" {
+		logger.Log.Fatal("获取实例ID失败", zap.Error(err))
 	}
 	electionRepo := election.NewRepository(pool)
 	elector := election.NewElector(electionRepo, "matching-engine: global", instanceID) // 所有交易对在一个进程里撮合

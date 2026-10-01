@@ -47,6 +47,12 @@ func NewService(
 		outboxRepo:       outboxRepo,
 		publishedMsgChan: make(chan uuid.UUID, 5000),
 	}
+
+	// 在后台启动清除成功发送的消息
+	if s.outboxRepo != nil {
+		go s.batchMarkPublishedWorker()
+	}
+
 	return s
 }
 

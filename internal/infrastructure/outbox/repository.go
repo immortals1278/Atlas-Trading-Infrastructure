@@ -126,7 +126,7 @@ func (r *Repository) BatchInsert(ctx context.Context, msgs []*Message) error {
 
 	tx := db.GetTx(ctx)
 	if tx == nil {
-		return fmt.Errorf("BatchInsert must be called in ExecTx")
+		return fmt.Errorf("BatchInsert 必须在事务内执行")
 	}
 
 	rows := make([][]any, 0, len(msgs))
