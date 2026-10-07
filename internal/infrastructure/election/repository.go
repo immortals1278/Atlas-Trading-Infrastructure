@@ -8,7 +8,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
 )
 
 type Repository struct {
@@ -42,7 +41,7 @@ func (r *Repository) AcquireLock(ctx context.Context, partition, instanceID stri
 		if errors.Is(err, pgx.ErrNoRows) { // pgx 找不到任何符合条件的行
 			return 0, false, nil
 		}
-		return 0, false, fmt.Errorf("取得leader失败 : %w", zap.Error(err))
+		return 0, false, fmt.Errorf("取得leader失败 : %w", err)
 
 	}
 

@@ -21,7 +21,7 @@ func NewEngine(Symbol string) *Engine {
 
 // 处理新订单，返回成交结果
 func (e *Engine) Process(order *Order) []*Trade {
-	e.mu.Lock()
+	e.mu.Lock() // 防止两个goroutine同时改orderbook
 	defer e.mu.Unlock()
 
 	var trades []*Trade

@@ -171,7 +171,7 @@ func (s *EventSubscriber) executeSettlementTx(ctx context.Context, event *domain
 
 		takerOrder := lockedOrders[event.TakerOrderID]
 
-		// tx内再查一次
+		// tx内再查一次幂等
 		if takerOrder.Status != domain.StatusNew {
 			return ErrIdempotencySkip
 		}

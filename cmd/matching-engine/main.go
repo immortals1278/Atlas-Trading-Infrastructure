@@ -120,7 +120,6 @@ func main() {
 		}
 		logger.Log.Info("撮合引擎快照还原完成")
 
-		// 建立kafka topic （没实现）TODO
 		topicCtx, topicCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer topicCancel()
 		if err := producer.CreateTopics(topicCtx, []string{
@@ -151,14 +150,14 @@ func main() {
 
 		consumer, consumerErr := kafka.NewConsumer(kafkaCfg, "matching-engine", []string{domain.TopicOrders})
 		if consumerErr != nil {
-			logger.Log.Error("matching-engine: 建立 matching consumer 失敗", zap.Error(consumerErr))
+			logger.Log.Error("matching-engine: 建立 matching consumer 失败", zap.Error(consumerErr))
 			cancel()
 			return
 		}
 
 		matchConsumer = consumer
 		matchConsumer.Start(consumerCtx, svc.HandleEvents)
-		logger.Log.Info("Kafka matching consumer 已啟動", zap.String("topic", domain.TopicOrders))
+		logger.Log.Info("Kafka matching consumer 已启动", zap.String("topic", domain.TopicOrders))
 	}
 
 	// 停止kafka consumer

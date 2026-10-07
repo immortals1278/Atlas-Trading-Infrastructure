@@ -62,16 +62,18 @@ func (ob *Orderbook) RemoveOrder(orderID uuid.UUID, side OrderSide) bool {
 	if side == SideBuy {
 		for i, order := range ob.bids {
 			if order.Id == orderID {
-				ob.bids[i] = nil
-				ob.bids = append(ob.bids[:i], ob.bids[i+1:]...)
+				copy(ob.bids[i:], ob.bids[i+1:]) // 防止内存泄露
+				ob.bids[len(ob.bids)-1] = nil    // 置空尾部残留
+				ob.bids = ob.bids[:len(ob.bids)-1]
 				return true
 			}
 		}
 	} else {
 		for i, order := range ob.asks {
 			if order.Id == orderID {
-				ob.asks[i] = nil
-				ob.asks = append(ob.asks[:i], ob.asks[i+1:]...)
+				copy(ob.asks[i:], ob.asks[i+1:])
+				ob.asks[len(ob.asks)-1] = nil
+				ob.asks = ob.asks[:len(ob.asks)-1]
 				return true
 			}
 		}
