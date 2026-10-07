@@ -210,10 +210,10 @@ func (s *EventSubscriber) executeSettlementTx(ctx context.Context, event *domain
 			takerOrder.FilledQuantity = takerOrder.FilledQuantity.Add(trade.Quantity)
 		}
 
-		var refundAmount decimal.Decimal // 取消订单要退的款
+		var refundAmount decimal.Decimal // 自成交订单要退的款
 		if takerOrder.FilledQuantity.Equal(takerOrder.Quantity) {
 			takerOrder.Status = domain.StatusFilled
-		} else if event.RemainingQty.IsZero() { // 吃单被取消
+		} else if event.RemainingQty.IsZero() { // 自成交保护
 			takerOrder.Status = domain.StatusCanceled
 			canceledQty := takerOrder.Quantity.Sub(takerOrder.FilledQuantity)
 			if takerOrder.Side == domain.SideBuy {
@@ -273,6 +273,7 @@ func (s *EventSubscriber) executeSettlementTx(ctx context.Context, event *domain
 		return err
 	}
 
+	// 将来实现前端推送服务订阅这个topic
 	if s.eventBus != nil {
 		for _, order := range updateOrders {
 			event := &domain.OrderUpdatedEvent{
@@ -373,7 +374,7 @@ func (s *EventSubscriber) handleOrderCanceled(ctx context.Context, event *domain
 		}
 
 		if amount.GreaterThan(decimal.Zero) {
-			if err := s.accountRepo.UnlockFunds(ctx, order.UserID, currency, amount); err != nil { //没定义
+			if err := s.accountRepo.UnlockFunds(ctx, order.UserID, currency, amount); err != nil {
 				return fmt.Errorf("解锁资金失败: %w", err)
 			}
 		}

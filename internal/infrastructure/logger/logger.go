@@ -6,7 +6,7 @@ import (
 
 var Log *zap.Logger
 
-// sync确保缓存区写入
+// 把内存缓冲区里还没落盘的日志强制写入磁盘
 func Sync() {
 	_ = Log.Sync()
 }
