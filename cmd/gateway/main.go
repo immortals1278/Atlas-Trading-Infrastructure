@@ -77,8 +77,6 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
-	r.Any("/docx/*path", gin.WrapH(orderProxy))
-	r.Any("/swagger/*path", gin.WrapH(orderProxy))
 
 	apiGroup := r.Group("/api/v1")
 	{
