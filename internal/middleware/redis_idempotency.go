@@ -15,7 +15,7 @@ type RedisIdempotencyStore struct {
 	client *redis.Client
 }
 
-func NewRedisIdempotencyStore(client *redis.Client) IdempotencyStore { // TODO创建完不用定期清理？
+func NewRedisIdempotencyStore(client *redis.Client) IdempotencyStore {
 	return &RedisIdempotencyStore{
 		client: client,
 	}
