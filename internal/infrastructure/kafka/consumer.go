@@ -62,6 +62,7 @@ func (c *Consumer) Start(ctx context.Context, Handler HandleFunc) {
 			// ctx被取消 优雅退出
 			if ctx.Err() != nil {
 				logger.Log.Info("kafka consumer 已停止", zap.String("groupID", c.groupID))
+				return
 			}
 
 			if errs := fetches.Errors(); len(errs) != 0 {

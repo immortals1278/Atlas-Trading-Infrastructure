@@ -175,7 +175,7 @@ func main() {
 			consumerCancel = nil
 		}
 		if matchConsumer != nil {
-			matchConsumer.Wait()
+			matchConsumer.Wait() // 外部阻塞等待consumer完全退出
 			matchConsumer = nil
 		}
 		logger.Log.Info("Kafka Consumer 已停止")
