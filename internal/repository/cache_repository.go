@@ -36,7 +36,7 @@ func (r *RedisCacheRepository) SetOrderBookSnapshot(ctx context.Context, snapsho
 		if success and type(decoded) == "table" then
 			local current_token = tonumber(decoded.fencing_token) or 0
 			local new_token = tonumber(ARGV[1]) or 0
-			if new_token > 0 and new_token < current_token then
+			if new_token > 0 and new_token < current_token then -- 检查是否是leader
 				return 0 
 			end
 		end
